@@ -13,7 +13,8 @@ await rm(output, { recursive: true, force: true });
 await mkdir(join(plugin, 'admin-next', 'fields'), { recursive: true });
 
 const editorCss = await readFile(join(root, 'assets', 'css', 'editor.css'), 'utf8');
-await build({
+const bundled = await build({
+  metafile: true,
   entryPoints: [join(root, 'src', 'admin2-field.js')],
   bundle: true,
   format: 'esm',
@@ -45,18 +46,29 @@ await copyTree('classes');
 await mkdir(join(plugin, 'assets', 'css'), { recursive: true });
 await copyFile(join(root, 'assets', 'css', 'alerts.css'), join(plugin, 'assets', 'css', 'alerts.css'));
 
-const notices = ['MIT License notices for bundled dependencies:'];
-for (const folder of await readdir(join(root, 'node_modules', '@tiptap'))) {
-  for (const name of ['LICENSE', 'LICENSE.md', 'LICENSE.txt']) {
-    try { const license = await readFile(join(root, 'node_modules', '@tiptap', folder, name), 'utf8'); notices.push(`\n## @tiptap/${folder}\n${license}`); break; } catch {}
-  }
+// Third-party notices for exactly the packages esbuild put in the bundle (read from its metafile).
+// Packages sharing a license text are listed together. A bundled package without a license text
+// (in the package, or in licenses/ for scopes that publish none) fails the build.
+const fallbackLicenses = { '@tiptap/': join(root, 'licenses', 'tiptap-LICENSE.md') };
+const packages = [...new Set(Object.keys(bundled.metafile.inputs)
+  .map((input) => input.replaceAll('\\', '/').match(/node_modules\/((?:@[^/]+\/)?[^/]+)\//)?.[1])
+  .filter(Boolean))].sort();
+const byLicense = new Map();
+for (const name of packages) {
+  const folder = join(root, 'node_modules', name);
+  const meta = JSON.parse(await readFile(join(folder, 'package.json'), 'utf8'));
+  const own = (await readdir(folder)).find((file) => /^licen[cs]e(?:\.(?:md|txt))?$/i.test(file));
+  const fallback = Object.entries(fallbackLicenses).find(([prefix]) => name.startsWith(prefix))?.[1];
+  if (!own && !fallback) throw new Error(`No license text for bundled package ${name}: add one to licenses/`);
+  const text = (await readFile(own ? join(folder, own) : fallback, 'utf8')).replace(/^<!--[\s\S]*?-->\s*/, '').trim();
+  if (!byLicense.has(text)) byLicense.set(text, []);
+  byLicense.get(text).push(`${name} ${meta.version} (${meta.license})`);
 }
-for (const name of ['marked']) {
-  for (const file of ['LICENSE', 'LICENSE.md', 'LICENSE.txt']) {
-    try { notices.push(`\n## ${name}\n${await readFile(join(root, 'node_modules', name, file), 'utf8')}`); break; } catch {}
-  }
-}
-await writeFile(join(plugin, 'THIRD-PARTY-NOTICES.md'), notices.join('\n'));
+const notices = ['# Third-party notices', '', `The editor bundle (admin-next/fields/visual-editor.js) includes ${packages.length} packages, listed with their license.`];
+for (const [text, names] of byLicense) notices.push('', `## ${names.join(', ')}`, '', text);
+await writeFile(join(plugin, 'THIRD-PARTY-NOTICES.md'), notices.join('\n') + '\n');
+// Shipped with the committed bundle too, since the repository itself installs as a plugin.
+await writeFile(join(root, 'THIRD-PARTY-NOTICES.md'), notices.join('\n') + '\n');
 
 async function files(directory, base = directory) {
   const list = [];
