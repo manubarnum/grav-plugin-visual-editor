@@ -58,6 +58,14 @@ async function apiPost(path, body) {
 }
 
 export class VisualEditorField extends HTMLElement {
+  /**
+   * Admin2 treats every `change` from a custom field as a commit (undo entry with two full copies of
+   * the page, and an auto-save after 500 ms). Report edits once typing pauses instead of per keystroke;
+   * pending edits are flushed on blur, Ctrl/Cmd+S, `grav:editor:save` and removal, so none is lost.
+   * 0 reports at once.
+   */
+  static changeDelay = 400;
+
   constructor() {
     super();
     this._field = null;
@@ -112,11 +120,19 @@ export class VisualEditorField extends HTMLElement {
       services: this.services(),
       onChange: (markdown) => {
         this._value = markdown;
-        this.dispatchEvent(new CustomEvent('change', { detail: markdown }));
+        this.scheduleChange();
       },
     });
     if (readonly) this.editor.editor.setEditable(false);
     this.applyPageBackground();
+    // Report pending edits before anything can read or save the page.
+    this.onFocusOut = (event) => { if (!this.contains(event.relatedTarget)) this.flushChange(); };
+    this.onSaveKey = (event) => { if ((event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 's') this.flushChange(); };
+    this.onSaveEvent = () => this.flushChange();
+    this.addEventListener('focusout', this.onFocusOut);
+    // Capture on window: runs before Admin2's own save shortcut and `grav:editor:save` listeners.
+    window.addEventListener('keydown', this.onSaveKey, true);
+    window.addEventListener('grav:editor:save', this.onSaveEvent, true);
     // Admin2's media panel "insert" button asks the active editor to insert at the cursor.
     this.onInsert = (event) => {
       if (!this.isConnected || event.detail?.mode !== 'insert-at-cursor' || typeof event.detail.content !== 'string') return;
@@ -134,11 +150,31 @@ export class VisualEditorField extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.flushChange();
+    this.removeEventListener('focusout', this.onFocusOut);
+    window.removeEventListener('keydown', this.onSaveKey, true);
+    window.removeEventListener('grav:editor:save', this.onSaveEvent, true);
     this.themeObserver?.disconnect();
     window.removeEventListener('grav:editor:insert-content', this.onInsert);
     window.removeEventListener('grav:invalidate', this.onInvalidate);
     this.editor?.destroy();
     this.editor = null;
+  }
+
+  scheduleChange() {
+    this.changePending = true;
+    window.clearTimeout(this.changeTimer);
+    const delay = VisualEditorField.changeDelay;
+    if (delay > 0) this.changeTimer = window.setTimeout(() => this.flushChange(), delay);
+    else this.flushChange();
+  }
+
+  /** Report the pending edit (if any) to Admin2 now. */
+  flushChange() {
+    window.clearTimeout(this.changeTimer);
+    if (!this.changePending) return;
+    this.changePending = false;
+    this.dispatchEvent(new CustomEvent('change', { detail: this._value }));
   }
 
   /** Page-relative image paths are shown through Admin2's media URLs; Markdown keeps the bare path. */

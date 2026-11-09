@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 // Mimic Admin2's page editor: globals set by the SPA, then the field module imported with its tag.
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'https://grav.example/admin2/pages/edit/blog/post', pretendToBeVisual: true });
 const { window } = dom;
-for (const name of ['document', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'getComputedStyle', 'DOMParser', 'CustomEvent', 'Event', 'customElements', 'DragEvent', 'ClipboardEvent', 'FormData', 'MouseEvent']) {
+for (const name of ['document', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'getComputedStyle', 'DOMParser', 'CustomEvent', 'Event', 'customElements', 'DragEvent', 'ClipboardEvent', 'FormData', 'MouseEvent', 'FocusEvent', 'KeyboardEvent']) {
   if (window[name] !== undefined) Object.defineProperty(globalThis, name, { value: window[name], configurable: true, writable: true });
 }
 // Node 21+ defines a getter-only navigator; replace it with jsdom's.
@@ -29,8 +29,11 @@ window.__GRAV_PAGE_MEDIA = () => [
   { filename: 'notes.pdf', type: 'application/pdf', url: 'https://grav.example/notes.pdf', thumb: undefined, alt: '', title: '' },
 ];
 
-await import('../src/admin2-field.js');
+const { VisualEditorField } = await import('../src/admin2-field.js');
 const tag = window.__GRAV_FIELD_TAG;
+// Most tests check what one edit reports: report it at once. The batching tests set their own delay.
+VisualEditorField.changeDelay = 0;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Mount the element the way CustomFieldWrapper.svelte does and record its change events. */
 function mount(value, field = { name: 'content', type: 'visual-editor', visual_editor: { smartTypography: false } }) {
@@ -356,6 +359,54 @@ test('a reference link keeps its form unless its URL is changed in the link dial
   editor.dialogElement.querySelector('button[type="submit"]').click();
   assert.match(changes.at(-1), /^See \[Grav\]\(https:\/\/example\.org\)\.\n\n\[g\]: https:\/\/getgrav\.org\n$/);
   el.remove();
+});
+
+test('typing is reported to Admin2 once per pause, not once per keystroke', async () => {
+  VisualEditorField.changeDelay = 40;
+  try {
+    const { el, changes } = mount('Hello\n');
+    const tiptap = el.editor.editor;
+    tiptap.commands.setTextSelection(tiptap.state.doc.content.size - 1);
+    for (const letter of ' world') tiptap.commands.insertContent(letter);
+    assert.deepEqual(changes, [], 'nothing reported while typing');
+    assert.equal(el.value, 'Hello world\n', 'value is always current');
+    await wait(80);
+    assert.deepEqual(changes, ['Hello world\n'], 'one change after the pause, with the final text');
+    el.remove();
+  } finally { VisualEditorField.changeDelay = 0; }
+});
+
+test('pending edits are reported at once on blur, Ctrl+S, grav:editor:save and removal', async () => {
+  VisualEditorField.changeDelay = 10000;
+  try {
+    const type = (el, text) => { const t = el.editor.editor; t.commands.setTextSelection(t.state.doc.content.size - 1); t.commands.insertContent(text); };
+    const outside = document.createElement('button');
+    document.body.append(outside);
+
+    let { el, changes } = mount('A\n');
+    type(el, '1');
+    el.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true, relatedTarget: outside }));
+    assert.deepEqual(changes, ['A1\n'], 'blur');
+
+    let order = [];
+    const adminSave = (event) => { if ((event.ctrlKey || event.metaKey) && event.key === 's') order.push('admin2 save'); };
+    window.addEventListener('keydown', adminSave);
+    el.addEventListener('change', () => order.push('change'));
+    type(el, '2');
+    window.document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
+    assert.deepEqual(order, ['change', 'admin2 save'], 'Ctrl+S: reported before Admin2 saves');
+    window.removeEventListener('keydown', adminSave);
+
+    type(el, '3');
+    window.dispatchEvent(new CustomEvent('grav:editor:save'));
+    assert.equal(changes.at(-1), 'A123\n', 'grav:editor:save');
+
+    type(el, '4');
+    el.remove();
+    assert.equal(changes.at(-1), 'A1234\n', 'removal');
+    assert.equal(changes.length, 4);
+    outside.remove();
+  } finally { VisualEditorField.changeDelay = 0; }
 });
 
 test('list buttons produce Markdown lists', async () => {
