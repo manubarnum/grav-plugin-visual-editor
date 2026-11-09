@@ -343,6 +343,21 @@ test('table style: plain, normal, back to site default, and deleting a styled ta
   el.remove();
 });
 
+test('a reference link keeps its form unless its URL is changed in the link dialog', () => {
+  const { el, changes } = mount('See [Grav][g].\n\n[g]: https://getgrav.org\n');
+  const editor = el.editor;
+  assert.equal(el.querySelector('.ProseMirror a').getAttribute('href'), 'https://getgrav.org');
+  editor.editor.commands.setTextSelection({ from: 5, to: 9 }); // the link text "Grav"
+  editor.link();
+  editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.deepEqual(changes, [], 'same URL: nothing changes');
+  editor.link();
+  editor.dialogElement.querySelector('input[name="href"]').value = 'https://example.org';
+  editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.match(changes.at(-1), /^See \[Grav\]\(https:\/\/example\.org\)\.\n\n\[g\]: https:\/\/getgrav\.org\n$/);
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

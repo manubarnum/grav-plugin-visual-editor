@@ -18,7 +18,7 @@ import TableCell from '@tiptap/extension-table-cell';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import { alertKinds, addMediaAttributes, colorFromOpen, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
+import { alertKinds, addMediaAttributes, colorFromOpen, referenceDefinitions, resolveReferences, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -124,6 +124,37 @@ const ImageWithSource = Image.extend({
         ignoreMutation() { return true; },
       };
     };
+  },
+});
+
+/** Links remember a reference-style origin (`[text][label]`) so they are saved in the same form. */
+const ReferenceLink = Link.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      // TipTap's Link has no title: without it `[text](url "Title")` lost its title on save.
+      title: { default: null, parseHTML: (element) => element.getAttribute('title') },
+      reference: { default: null, parseHTML: (element) => element.getAttribute('data-ve-ref'), renderHTML: (attrs) => (attrs.reference ? { 'data-ve-ref': attrs.reference } : {}) },
+      referenceForm: { default: null, parseHTML: (element) => element.getAttribute('data-ve-ref-form'), renderHTML: (attrs) => (attrs.referenceForm ? { 'data-ve-ref-form': attrs.referenceForm } : {}) },
+    };
+  },
+});
+
+/** An image inside a sentence (or a link): inline, so its paragraph is not split. Standalone images stay blocks. */
+const InlineImage = Node.create({
+  name: 'inlineImage', inline: true, group: 'inline', atom: true, draggable: true,
+  addOptions() { return { resolve: null }; },
+  addAttributes() {
+    return {
+      src: { default: null, parseHTML: (element) => element.getAttribute('data-markdown-src') || element.getAttribute('src') },
+      alt: { default: null },
+      title: { default: null },
+    };
+  },
+  parseHTML() { return [{ tag: 'img[data-ve-inline]', priority: 60 }]; },
+  renderHTML({ HTMLAttributes }) {
+    const markdownSrc = HTMLAttributes.src || '';
+    return ['img', mergeAttributes(HTMLAttributes, { src: resolveMedia(this.options.resolve, markdownSrc), 'data-markdown-src': markdownSrc, 'data-ve-inline': '', class: 've-inline-image' })];
   },
 });
 
@@ -349,7 +380,7 @@ export function blockHandlePlugin() {
 
 /** `pageMediaUrl` is a URL prefix or a `(src) => url` resolver for page-relative images. */
 export function markdownToHtml(markdown, pageMediaUrl = '') {
-  const protectedMarkdown = protectBlocks(markdown);
+  const protectedMarkdown = resolveReferences(protectBlocks(markdown), referenceDefinitions(markdown));
   const parsed = markdownTables(protectedMarkdown, (cell) => marked.parseInline(protectInline(cell)));
   const parsedWithInline = protectInline(parsed);
   return addMediaAttributes(githubAlerts(marked.parse(parsedWithInline)), pageMediaUrl);
@@ -384,9 +415,10 @@ export function createExtensions(config) {
   return [
     StarterKit.configure({ blockquote: false, codeBlock: false, link: false, listItem: false }),
     FlexibleListItem,
-    Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: null } }),
+    ReferenceLink.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: null } }),
     CodeBlock,
     ImageWithSource.configure({ inline: false, allowBase64: false, resolve: config.resolveMediaUrl || config.pageMediaUrl || null }),
+    InlineImage.configure({ resolve: config.resolveMediaUrl || config.pageMediaUrl || null }),
     Highlight.configure({ multicolor: false }),
     Subscript, Superscript, Keyboard, Citation, Abbreviation,
     BlockquoteWithAlert, AlertTitle, ColorBlock, AlignBlock, TableStyle, ProtectedBlock.configure(config.hooks || {}), InlineRaw,

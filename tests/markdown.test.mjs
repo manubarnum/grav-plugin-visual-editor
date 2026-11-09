@@ -170,3 +170,43 @@ test('per-table style wrappers round-trip around their table', () => {
     assert.equal(roundTrip(source), source, style);
   }
 });
+
+test('reference-style links keep their form and their definitions', () => {
+  const sources = [
+    'See [Grav][g] and [the docs][Docs].\n\n[g]: https://getgrav.org\n[docs]: https://learn.getgrav.org "Learn Grav"\n',
+    'Collapsed [Grav][] and shortcut [Grav].\n\n[grav]: https://getgrav.org\n',
+  ];
+  for (const source of sources) assert.equal(roundTrip(source), source);
+  assert.match(markdownToHtml(sources[0]), /<a href="https:\/\/getgrav\.org"/);
+});
+
+test('an undefined [label] after a link text is still not a reference', () => {
+  assert.equal(roundTrip('[notice]Text[/notice]\n'), '[notice]Text[/notice]\n');
+  assert.equal(roundTrip('Hello [badge type="new"] there.\n'), 'Hello [badge type="new"] there.\n');
+});
+
+test('reference syntax inside code is left alone', () => {
+  const source = 'Use `[a][b]` literally.\n\n[b]: https://x.test\n';
+  assert.equal(roundTrip(source), source);
+});
+
+test('footnotes keep their references and definitions', () => {
+  const source = 'Text[^1] and more[^note].\n\n[^1]: First note.\n[^note]: Second note\n    continued.\n';
+  assert.equal(roundTrip(source), source);
+});
+
+test('images inside a sentence stay inline; linked images keep their link', () => {
+  for (const source of ['Look ![a](a.jpg) here\n', 'Logo: [![Grav](logo.png)](https://getgrav.org) end.\n', '[![Grav](logo.png)](https://getgrav.org)\n']) {
+    assert.equal(roundTrip(source), source);
+  }
+});
+
+test('a link around mixed formatting stays one link', () => {
+  const source = 'See [a **b** *c*](https://x.test "T") end.\n';
+  assert.equal(roundTrip(source), source);
+});
+
+test('shortcodes, Twig and footnote syntax inside inline code stay literal', () => {
+  const source = 'Write `[notice]Hi[/notice]`, `{{ page.title }}` or `[^1]` as text.\n';
+  assert.equal(roundTrip(source), source);
+});

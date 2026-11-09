@@ -245,7 +245,9 @@ export class VisualEditor {
     ], ({ href, title }) => {
       if (!href) return;
       if (this.editor.state.selection.empty) this.editor.chain().focus().insertContent(`<a href="${escapeHtml(href)}">${escapeHtml(title || href)}</a>`).run();
-      this.editor.chain().focus().extendMarkRange('link').setLink({ href, title: title || null }).run();
+      // A new URL no longer matches the page's reference definition: save it as a plain link.
+      const unchanged = attributes.reference && href === attributes.href && (title || null) === (attributes.title || null);
+      this.editor.chain().focus().extendMarkRange('link').setLink({ href, title: title || null, ...(unchanged ? {} : { reference: null, referenceForm: null }) }).run();
     }, this.editor.isActive('link') ? () => this.editor.chain().focus().unsetLink().run() : null);
   }
 

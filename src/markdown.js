@@ -9,11 +9,13 @@ export const escapeMarkdown = (value) => String(value ?? '')
 const encodeSource = (value) => String(value ?? '').replace(/[^\p{L}\p{N} ]/gu, (char) => `&#${char.codePointAt(0)};`);
 export const alertKinds = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'];
 
-const inlinePattern = /(\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}|\{#[\s\S]*?#\}|(?<!!)\[\/?[a-zA-Z][\w:-]*(?:\s+[^\]\n]*)?\](?![(\[:]))|<\/?(?:span|abbr|cite|kbd|mark|sup|sub)(?:\s+[^<>]*)?>/g;
+const inlinePattern = /(\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}|\{#[\s\S]*?#\}|\[\^[^\]\s]+\](?!:)|(?<!!)\[\/?[a-zA-Z][\w:-]*(?:\s+[^\]\n]*)?\](?![(\[:]))|<\/?(?:span|abbr|cite|kbd|mark|sup|sub)(?:\s+[^<>]*)?>/g;
 
 /** Unknown HTML/Twig is never silently interpreted as editable prose. */
 export function protectInline(source) {
-  return String(source).replace(inlinePattern, (raw) => `<ve-inline data-source="${encodeSource(raw)}"></ve-inline>`);
+  // Inline code spans are literal: their brackets and braces are not shortcodes, Twig or footnotes.
+  const pattern = new RegExp('(`+)[\\s\\S]*?\\1|' + inlinePattern.source, 'g');
+  return String(source).replace(pattern, (raw, ticks) => (ticks ? raw : `<ve-inline data-source="${encodeSource(raw)}"></ve-inline>`));
 }
 
 function protectedBlock(source, kind = 'raw') {
@@ -72,6 +74,19 @@ export function protectBlocks(markdown) {
       const kind = /^\s*</.test(line) ? 'html' : 'twig';
       while (++i < lines.length && lines[i].trim() !== '') block.push(lines[i]);
       out.push(protectedBlock(block.join('\n'), kind));
+      continue;
+    }
+    // Link reference and footnote definitions: kept verbatim (marked would consume them).
+    if ((linkDefinition.test(line) || footnoteDefinition.test(line)) && (i === 0 || lines[i - 1].trim() === '')) {
+      const block = [line];
+      while (++i < lines.length) {
+        const next = lines[i];
+        const continuation = footnoteDefinition.test(block[block.length - 1]) || /^(?: {4}|\t)\S/.test(block[block.length - 1])
+          ? /^(?: {4}|\t)\S/.test(next) : false;
+        if (linkDefinition.test(next) || footnoteDefinition.test(next) || continuation) block.push(next);
+        else break;
+      }
+      out.push(protectedBlock(block.join('\n'), 'reference'));
       continue;
     }
     // Per-table style wrapper: `[div class="ve-table-plain"]` / `ve-table-normal` around one table.
@@ -169,6 +184,8 @@ export function addMediaAttributes(html, pageMediaUrl = '') {
   template.content.querySelectorAll('p').forEach((paragraph) => {
     const nodes = [...paragraph.childNodes].filter((node) => !(node.nodeType === 3 && !node.textContent.trim()));
     if (nodes.length && nodes.every((node) => node.nodeName === 'IMG')) paragraph.replaceWith(...nodes);
+    // Images that share their paragraph with text (or sit in a link) stay inline in that paragraph.
+    else paragraph.querySelectorAll('img').forEach((img) => img.setAttribute('data-ve-inline', ''));
   });
   template.content.querySelectorAll('img').forEach((img) => {
     img.setAttribute('data-markdown-src', img.getAttribute('src') || '');
@@ -212,6 +229,7 @@ export function nodeToMarkdown(node, depth = 0) {
       const body = blocks();
       return `${node.attrs.open}\n\n${body ? body + '\n\n' : ''}[/div]`;
     }
+    case 'inlineImage':
     case 'image': return `![${String(node.attrs.alt || '').replace(/([\[\]\\])/g, '\\$1')}](${node.attrs.src || ''}${node.attrs.title ? ` "${String(node.attrs.title).replace(/"/g, '\\"')}"` : ''})`;
     case 'codeBlock': {
       const language = node.attrs.language || '';
@@ -252,9 +270,24 @@ export function nodeToMarkdown(node, depth = 0) {
 function childrenOf(node) { return Array.from({ length: node.childCount }, (_, i) => node.child(i)); }
 /** Continuation lines align with the item content (CommonMark); blank lines stay empty. */
 function indentContinuation(text, width) { return text.replace(/\n(?!\n|$)/g, '\n' + ' '.repeat(width)); }
-function inlineChildren(node) { return childrenOf(node).map(inlineNodeToMarkdown).join(''); }
+/** Inline content; consecutive nodes sharing one link mark are written as a single link. */
+function inlineChildren(node) {
+  const nodes = childrenOf(node);
+  let out = '';
+  for (let i = 0; i < nodes.length;) {
+    const link = nodes[i].marks?.find((mark) => mark.type.name === 'link');
+    if (!link) { out += inlineNodeToMarkdown(nodes[i]); i++; continue; }
+    let content = '';
+    while (i < nodes.length && nodes[i].marks?.some((mark) => mark.eq(link))) {
+      content += inlineNodeToMarkdown(nodes[i], { withoutLink: true });
+      i++;
+    }
+    out += linkMarkdown(content, link.attrs);
+  }
+  return out;
+}
 
-export function inlineNodeToMarkdown(node) {
+export function inlineNodeToMarkdown(node, { withoutLink = false } = {}) {
   let text = nodeToMarkdown(node);
   if (node.type.name === 'inlineRaw') return node.attrs.source;
   if (node.isText) text = escapeMarkdown(node.text || '');
@@ -273,8 +306,8 @@ export function inlineNodeToMarkdown(node) {
     const mark = marks.find((item) => item.type.name === 'abbreviation');
     text = `<abbr title="${String(mark.attrs.title || '').replace(/"/g, '&quot;')}">${text}</abbr>`;
   }
-  const link = marks.find((mark) => mark.type.name === 'link');
-  if (link) text = `[${text}](${link.attrs.href || ''}${link.attrs.title ? ` "${String(link.attrs.title).replace(/"/g, '\\"')}"` : ''})`;
+  const link = withoutLink ? null : marks.find((mark) => mark.type.name === 'link');
+  if (link) text = linkMarkdown(text, link.attrs);
   return text;
 }
 
@@ -373,4 +406,61 @@ export function colorBlockTag(color, open = '') {
     ? tag.replace(/([;"\s])(color\s*:\s*)[^;"\]]+/i, `$1$2${text}`)
     : tag.replace(/(background(?:-color)?\s*:\s*[^;"\]]+)/i, `$1;color:${text}`);
   return tag;
+}
+
+/**
+ * Link reference definitions (`[label]: url "title"`) and footnote definitions (`[^id]: text`).
+ * Definitions are protected verbatim; reference usages are resolved here so they display as links
+ * and keep their form (`[text][label]`, `[label][]`, `[label]`) when saved.
+ */
+const linkDefinition = /^ {0,3}\[(?!\^)([^\]\n]+)\]:[ \t]*<?([^\s>]+)>?(?:[ \t]+(?:"([^"\n]*)"|'([^'\n]*)'|\(([^)\n]*)\)))?[ \t]*$/;
+const footnoteDefinition = /^ {0,3}\[\^[^\]\s]+\]:/;
+
+const normalizeLabel = (label) => String(label).trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** label (normalized) → { href, title }, ignoring fenced code. First definition wins, as in CommonMark. */
+export function referenceDefinitions(markdown) {
+  const definitions = new Map();
+  let fence = null;
+  for (const line of String(markdown).replace(/\r\n?/g, '\n').split('\n')) {
+    const marker = line.match(/^\s*(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) fence = marker[1][0];
+      else if (marker[1][0] === fence) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const match = line.match(linkDefinition);
+    if (match && !definitions.has(normalizeLabel(match[1]))) {
+      definitions.set(normalizeLabel(match[1]), { href: match[2], title: match[3] ?? match[4] ?? match[5] ?? '' });
+    }
+  }
+  return definitions;
+}
+
+/** Turn reference usages into `<a data-ve-ref>` so the editor shows links and can write the same form back. */
+export function resolveReferences(source, definitions) {
+  if (!definitions.size) return source;
+  const usage = /(`+)[\s\S]*?\1|(\\?)(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?(?![(:[])/g;
+  return String(source).replace(usage, (raw, ticks, escaped, bang, text, label) => {
+    if (ticks || escaped || bang) return raw;
+    const form = label === undefined ? 'shortcut' : label === '' ? 'collapsed' : 'full';
+    const key = form === 'full' ? label : text;
+    const target = definitions.get(normalizeLabel(key));
+    if (!target) return raw;
+    const title = target.title ? ` title="${escapeHtml(target.title)}"` : '';
+    return `<a href="${escapeHtml(target.href)}"${title} data-ve-ref="${escapeHtml(key)}" data-ve-ref-form="${form}">${text}</a>`;
+  });
+}
+
+/** Markdown for a link around already-serialized content, in its original reference form when it had one. */
+export function linkMarkdown(content, attrs) {
+  const reference = attrs.reference;
+  if (reference) {
+    const form = attrs.referenceForm;
+    if (form === 'shortcut' && content === reference) return `[${content}]`;
+    if (form === 'collapsed' && content === reference) return `[${content}][]`;
+    return `[${content}][${reference}]`;
+  }
+  return `[${content}](${attrs.href || ''}${attrs.title ? ` "${String(attrs.title).replace(/"/g, '\\"')}"` : ''})`;
 }
