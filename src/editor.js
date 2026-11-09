@@ -16,6 +16,9 @@ const labels = {
   raw: 'HTML or Twig block', shortcode: 'Insert shortcode', source: 'Markdown source', more: 'More formatting',
   highlight: 'Highlight', subscript: 'Subscript', superscript: 'Superscript', keyboard: 'Keyboard text', citation: 'Citation', abbreviation: 'Abbreviation',
 };
+/** Where shortcode-backed blocks may be created: their tags must start a line (not inside a list or quote). */
+const shortcodeContainers = ['doc', 'colorBlock', 'alignBlock'];
+
 const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'alignLeft', 'alignCenter', 'alignRight', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
 const messages = {
   visual: 'Visual', source: 'Source', saved: 'Markdown is synchronized with Grav’s page form.', copied: 'Source copied.',
@@ -314,8 +317,7 @@ export class VisualEditor {
   wrapBlocks(type, attrs) {
     const { state } = this.editor;
     const { $from, $to } = state.selection;
-    const containers = ['doc', 'colorBlock', 'alignBlock'];
-    const range = $from.blockRange($to, (node) => containers.includes(node.type.name));
+    const range = $from.blockRange($to, (node) => shortcodeContainers.includes(node.type.name));
     if (!range) return false;
     this.editor.chain().focus().command(({ tr }) => { tr.wrap(range, [{ type: state.schema.nodes[type], attrs }]); return true; }).run();
     return true;
@@ -490,7 +492,7 @@ export class VisualEditor {
       }
       if (!tableStyles.includes(style)) return;
       // The wrapper is a shortcode: its tags must start their line, so not inside a list or quote.
-      if (!['doc', 'colorBlock', 'alignBlock'].includes(parent)) return this.notify('Move the table out of the list or quote to change its style.', true);
+      if (!shortcodeContainers.includes(parent)) return this.notify('Move the table out of the list or quote to change its style.', true);
       const type = this.editor.state.schema.nodes.tableStyle;
       const { from, to } = this.editor.state.selection;
       this.editor.chain().focus().command(({ tr }) => {

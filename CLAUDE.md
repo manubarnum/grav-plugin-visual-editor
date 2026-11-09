@@ -51,7 +51,7 @@ A Markdown round-trip change usually touches both directions: parse/protect in `
 
 ### Config surface
 
-Adding an option means updating `visual-editor.yaml` (defaults), `blueprints.yaml` (plugin form) and `clientConfig()` in `visual-editor.php`, plus `defaultConfig` in `src/editor.js` if the JS needs a default. The default toolbar list is duplicated in the YAML, the blueprint (default + description) and `defaults` in `src/editor.js`. The version is in `package.json` (+ lockfile) and `blueprints.yaml`.
+Adding an option means updating `visual-editor.yaml` (defaults), `blueprints.yaml` (plugin form) and `clientConfig()` in `visual-editor.php`, plus `defaultConfig` in `src/editor.js` if the JS needs a default. The default toolbar list is duplicated in the YAML, the blueprint (default + description) and `defaults` in `src/editor.js`, and the contrast rule exists in PHP and JS: `tests/config.test.mjs` (and the shared `tests/fixtures/contrast.json`, also read by the PHP tests) fail when these copies drift. The version is in `package.json` (+ lockfile) and `blueprints.yaml`.
 
 ## Repo hygiene
 

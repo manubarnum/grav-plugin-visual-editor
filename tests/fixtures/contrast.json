@@ -1,0 +1,13 @@
+[
+  { "color": "#fde2e4", "text": "#1f2329" },
+  { "color": "#fff", "text": "#1f2329" },
+  { "color": "#ffffff", "text": "#1f2329" },
+  { "color": "#f1f1ef", "text": "#1f2329" },
+  { "color": "#84cc5c", "text": "#1f2329" },
+  { "color": "#808080", "text": "#ffffff" },
+  { "color": "#1d3557", "text": "#ffffff" },
+  { "color": "#000", "text": "#ffffff" },
+  { "color": "rgb(10, 20, 30)", "text": "#ffffff" },
+  { "color": "rgb(250, 240, 230)", "text": "#1f2329" },
+  { "color": "not-a-color", "text": "#1f2329" }
+]

@@ -151,6 +151,13 @@ test('page background: theme variables for the frontmatter color, nothing otherw
     same([], $assets->css, 'never in admin');
 });
 
+test('the PHP contrast rule matches the shared fixture (the JS tests check the same file)', function () {
+    foreach (json_decode(file_get_contents(__DIR__ . '/../fixtures/contrast.json'), true) as $case) {
+        $color = VisualEditorPlugin::safeColor($case['color']) ?? $case['color'];
+        same($case['text'], VisualEditorPlugin::contrastText($color), $case['color']);
+    }
+});
+
 // --- Tables ------------------------------------------------------------------------------------------
 
 test('plain tables: site-wide option, per-table class, or no css at all', function () {
