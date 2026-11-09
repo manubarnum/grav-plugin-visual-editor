@@ -17,10 +17,10 @@ class PreviewController extends AbstractApiController
 
     public function preview(ServerRequestInterface $request): ResponseInterface
     {
-        // Previews are for people editing pages; the editor only offers them there.
-        $this->requirePermission($request, 'api.pages.write');
+        $body = $this->getRequestBody($request);
+        $this->authorizePreview($request, is_string($body['route'] ?? null) ? $body['route'] : '');
 
-        $source = $this->getRequestBody($request)['source'] ?? null;
+        $source = $body['source'] ?? null;
         if (!is_string($source) || $source === '') {
             throw new ValidationException('A non-empty "source" string is required.');
         }
@@ -34,5 +34,19 @@ class PreviewController extends AbstractApiController
             'html' => $html ?? ShortcodePreview::escaped($source),
             'rendered' => $html !== null,
         ]);
+    }
+
+    /**
+     * Previews are for people editing the page: the same check as updating it. API versions with
+     * page-level rules (authorizePageAction) apply the page's own access rules; without a route, or on
+     * older API versions, the site-wide write permission is required.
+     */
+    private function authorizePreview(ServerRequestInterface $request, string $route): void
+    {
+        if ($route !== '' && method_exists($this, 'authorizePageAction') && method_exists($this, 'resolvePageByRoute')) {
+            $this->authorizePageAction($request, $this->resolvePageByRoute($route), 'update', 'api.pages.write');
+            return;
+        }
+        $this->requirePermission($request, 'api.pages.write');
     }
 }

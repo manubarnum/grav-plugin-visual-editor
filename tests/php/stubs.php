@@ -108,3 +108,63 @@ namespace VeTest {
         public function processShortcodes($source) { return '<div class="rendered">' . $source . '</div>'; }
     }
 }
+
+namespace Psr\Http\Message {
+    interface ServerRequestInterface {}
+    interface ResponseInterface {}
+}
+
+namespace Grav\Plugin\Api\Exceptions {
+    class ValidationException extends \RuntimeException {}
+    class ForbiddenException extends \RuntimeException {}
+}
+
+namespace Grav\Plugin\Api\Response {
+    class ApiResponse implements \Psr\Http\Message\ResponseInterface
+    {
+        public function __construct(public $data) {}
+        public static function create($data) { return new self($data); }
+    }
+}
+
+namespace Grav\Plugin\Api\Controllers {
+    /**
+     * The API plugin's controller base, reduced to what PreviewController uses. `calls` records the
+     * permission checks; `deny` makes a check (permission or page action) throw like the real API.
+     */
+    abstract class AbstractApiController
+    {
+        public array $calls = [];
+        public array $deny = [];
+        public array $pages = [];
+
+        public function __construct(protected $grav, protected $config) {}
+
+        protected function requirePermission($request, string $permission): void
+        {
+            $this->calls[] = "permission:$permission";
+            if (in_array($permission, $this->deny, true)) { throw new \Grav\Plugin\Api\Exceptions\ForbiddenException($permission); }
+        }
+
+        protected function getRequestBody($request): array { return $request->body; }
+
+        protected function resolvePageByRoute(string $route) { return $this->pages[$route] ?? null; }
+    }
+
+    /** API versions with page-level rules (authorizePageAction). */
+    abstract class PageAwareApiController extends AbstractApiController
+    {
+        protected function authorizePageAction($request, ?object $page, string $action, string $permission): void
+        {
+            $this->calls[] = 'page:' . ($page ? $page->route : 'none') . ":$action:$permission";
+            if (in_array($page ? $page->route : 'none', $this->deny, true)) { throw new \Grav\Plugin\Api\Exceptions\ForbiddenException('page'); }
+        }
+    }
+}
+
+namespace VeTest {
+    class Request implements \Psr\Http\Message\ServerRequestInterface
+    {
+        public function __construct(public array $body = []) {}
+    }
+}

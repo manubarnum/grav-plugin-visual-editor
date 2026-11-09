@@ -198,6 +198,66 @@ test('shortcode preview: null without shortcode-core, rendered with it, handlers
     same('<pre class="visual-editor-source-preview">&lt;b&gt;</pre>', ShortcodePreview::escaped('<b>'));
 });
 
+// --- Preview controller --------------------------------------------------------------------------
+
+/**
+ * Loads PreviewController against a given API base class: the real class extends
+ * AbstractApiController; a copy extending PageAwareApiController stands for API versions that have
+ * authorizePageAction(), so both code paths run.
+ */
+function previewController(bool $pageAware)
+{
+    static $loaded = [];
+    $base = $pageAware ? 'PageAwareApiController' : 'AbstractApiController';
+    $class = 'Grav\\Plugin\\VisualEditor\\PreviewController' . ($pageAware ? 'PageAware' : '');
+    if (!isset($loaded[$class])) {
+        $code = file_get_contents(__DIR__ . '/../../classes/PreviewController.php');
+        $code = str_replace(['<?php', 'declare(strict_types=1);'], '', $code);
+        if ($pageAware) {
+            $code = str_replace(['class PreviewController extends AbstractApiController', 'use Grav\\Plugin\\Api\\Controllers\\AbstractApiController;'],
+                ['class PreviewControllerPageAware extends PageAwareApiController', 'use Grav\\Plugin\\Api\\Controllers\\PageAwareApiController;'], $code);
+        }
+        eval($code);
+        $loaded[$class] = true;
+    }
+    return new $class(new Grav(['shortcode' => new ShortcodeManager()]), new Config());
+}
+
+test('preview: renders, and validates its input', function () {
+    $controller = previewController(false);
+    same('<div class="rendered">[notice]x[/notice]</div>', $controller->preview(new VeTest\Request(['source' => '[notice]x[/notice]']))->data['html']);
+    foreach ([[], ['source' => ''], ['source' => ['x']], ['source' => str_repeat('x', 200001)]] as $body) {
+        try {
+            $controller->preview(new VeTest\Request($body));
+            throw new RuntimeException('accepted ' . json_encode(array_map(fn($v) => is_string($v) ? strlen($v) : $v, $body)));
+        } catch (\Grav\Plugin\Api\Exceptions\ValidationException $expected) {}
+    }
+});
+
+test('preview without page-level rules (older API): site-wide write permission', function () {
+    $controller = previewController(false);
+    $controller->preview(new VeTest\Request(['source' => '[x]', 'route' => '/blog']));
+    same(['permission:api.pages.write'], $controller->calls);
+});
+
+test('preview checks the edited page (update) when the API has page-level rules', function () {
+    $controller = previewController(true);
+    $controller->pages['/blog'] = (object)['route' => '/blog'];
+    $controller->preview(new VeTest\Request(['source' => '[x]', 'route' => '/blog']));
+    same(['page:/blog:update:api.pages.write'], $controller->calls);
+
+    $controller->calls = [];
+    $controller->deny = ['/blog'];
+    try {
+        $controller->preview(new VeTest\Request(['source' => '[x]', 'route' => '/blog']));
+        throw new RuntimeException('a page the user may not update was previewed');
+    } catch (\Grav\Plugin\Api\Exceptions\ForbiddenException $expected) {}
+
+    $controller->calls = [];
+    $controller->preview(new VeTest\Request(['source' => '[x]']));
+    same(['permission:api.pages.write'], $controller->calls, 'no route: site-wide permission');
+});
+
 // --- Runner ------------------------------------------------------------------------------------------
 
 foreach ($tests as $name => $body) {
