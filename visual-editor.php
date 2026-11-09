@@ -1,102 +1,78 @@
 <?php
-/** Independent, Markdown-preserving visual editor for Grav. */
+/** Independent, Markdown-preserving visual editor for Grav Admin2. */
 
 namespace Grav\Plugin;
 
 use Grav\Common\Plugin;
-use Grav\Common\Page\Interfaces\PageInterface;
-use Grav\Common\Utils;
-use Grav\Plugin\VisualEditor\AdminBridge;
-use Grav\Plugin\VisualEditor\ShortcodePreviewExtension;
+use Grav\Plugin\VisualEditor\PreviewController;
 use RocketTheme\Toolbox\Event\Event;
+
+// classes/ is PSR-4 (composer.json) but the plugin ships no vendor/ autoloader: register it here,
+// before the API plugin resolves our route controller.
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'Grav\\Plugin\\VisualEditor\\';
+    if (strpos($class, $prefix) === 0) {
+        $file = __DIR__ . '/classes/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+        if (is_file($file)) {
+            require_once $file;
+        }
+    }
+});
 
 class VisualEditorPlugin extends Plugin
 {
+    /** Admin2 custom field type: `admin-next/fields/<type>.js`, also the content_editor preference value. */
+    public const FIELD_TYPE = 'visual-editor';
+
     public static function getSubscribedEvents(): array
     {
         return [
-            'onPluginsInitialized' => [['onPluginsInitialized', 0]],
-            'onTwigTemplatePaths' => [['onTwigTemplatePaths', 0]],
-            'onTwigSiteVariables' => [['onTwigSiteVariables', 0]],
+            'onAdminListContentEditors' => [['onAdminListContentEditors', 0]],
+            'onApiBlueprintResolved' => [['onApiBlueprintResolved', 0]],
+            'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0]],
             'onPageContentRaw' => [['addAlertStyles', 0]],
         ];
     }
 
-    public function onPluginsInitialized(): void
+    /** Offer the editor in the user profile's "Content editor" list (Admin2 fires this event). */
+    public function onAdminListContentEditors(Event $event): void
     {
-        if (!$this->config->get('plugins.visual-editor.enabled', true) || !$this->isAdmin()) {
+        if (!$this->isEnabled()) {
             return;
         }
-
-        $this->enable([
-            'onAssetsInitialized' => ['onAssetsInitialized', -1000],
-            'onTwigExtensions' => ['registerPreviewExtension', 0],
-            'onAdminTaskExecute' => ['onAdminTaskExecute', 0],
-        ]);
+        $options = $event['options'];
+        $options[self::FIELD_TYPE] = 'Visual Editor';
+        $event['options'] = $options;
     }
 
-    public function onTwigTemplatePaths(): void
+    /**
+     * Page blueprints served to Admin2: hand the editor its settings on the content field, and make it
+     * the field type when it is the site default and the user has not explicitly chosen another editor.
+     */
+    public function onApiBlueprintResolved(Event $event): void
     {
-        $this->grav['twig']->twig_paths[] = __DIR__ . '/templates';
-    }
-
-    public function registerPreviewExtension(): void
-    {
-        if (class_exists('Grav\\Plugin\\ShortcodeCore\\ShortcodeCorePlugin')) {
-            $this->grav['twig']->twig()->addExtension(new ShortcodePreviewExtension());
-        }
-    }
-
-    public function onAdminTaskExecute(Event $event): void
-    {
-        $controller = $event['controller'];
-        $method = (string)$event['method'];
-        if (!in_array($method, ['taskVisualEditorUpload', 'taskVisualEditorPreview', 'taskVisualEditorMedia'], true)) {
+        if (!$this->isEnabled() || ($event['context'] ?? null) !== 'page' || !is_array($event['fields'] ?? null)) {
             return;
         }
-        $event->stopPropagation();
-        $bridge = new AdminBridge($this->grav, $this->config);
-        $bridge->handleTask($method, $controller);
+        $user = $event['user'] ?? null;
+        $preference = $user ? (string)$user->get('content_editor', '') : '';
+        $useByDefault = (bool)$this->config->get('plugins.visual-editor.site_default', true)
+            && in_array($preference, ['', 'default', self::FIELD_TYPE], true);
+
+        $event['fields'] = $this->rewriteContentField($event['fields'], $useByDefault);
     }
 
-    public function onTwigSiteVariables(): void
+    public function onApiRegisterRoutes(Event $event): void
     {
-        if (!$this->isAdmin() || !$this->config->get('plugins.visual-editor.enabled', true) || !$this->isPageEditor()) {
+        if (!$this->isEnabled()) {
             return;
         }
-        $page = $this->grav['page'] ?? null;
-        $this->grav['twig']->twig_vars['visual_editor_config'] = [
-            'theme' => $this->config->get('plugins.visual-editor.theme', 'auto'),
-            'smartTypography' => (bool)$this->config->get('plugins.visual-editor.smart_typography', true),
-            'shortcodePreviews' => (bool)$this->config->get('plugins.visual-editor.shortcode_previews', true),
-            'toolbar' => preg_split('/\s*,\s*/', (string)$this->config->get('plugins.visual-editor.toolbar', ''), -1, PREG_SPLIT_NO_EMPTY),
-            'uploadUrl' => $this->adminUrl('visualEditorUpload'),
-            'previewUrl' => $this->adminUrl('visualEditorPreview'),
-            'mediaUrl' => $this->adminUrl('visualEditorMedia'),
-            'pageRoute' => $page instanceof PageInterface ? $page->route() : '',
-            'pageMediaUrl' => $page instanceof PageInterface ? $this->grav['base_url_relative'] . $page->route() . '/' : '',
-            'nonce' => Utils::getNonce('admin-form'),
-            'shortcodes' => $this->config->get('plugins.visual-editor.shortcodes', []),
-            'maxUploadBytes' => min(10 * 1024 * 1024, $this->uploadLimit()),
-            'version' => '1.0.0',
-        ];
-    }
-
-    public function onAssetsInitialized(): void
-    {
-        if (!$this->isPageEditor()) {
-            return;
-        }
-        $this->grav['assets']->addCss('plugin://visual-editor/assets/css/editor.css', ['priority' => 90]);
-        $this->grav['assets']->addCss('plugin://visual-editor/assets/css/alerts.css', ['priority' => 89]);
-        $this->grav['assets']->addInlineJs('window.GravVisualEditorConfig = ' . json_encode($this->grav['twig']->twig_vars['visual_editor_config'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';', ['priority' => 91]);
-        $this->grav['assets']->addJs('plugin://visual-editor/assets/js/editor.js', ['priority' => 90, 'loading' => 'defer']);
+        $event['routes']->post('/visual-editor/preview', [PreviewController::class, 'preview']);
     }
 
     public function addAlertStyles(Event $event): void
     {
-        if ($this->isAdmin() || !$this->config->get('plugins.visual-editor.enabled', true)
-            || !$this->config->get('plugins.visual-editor.frontend_alerts', true)) {
+        if ($this->isAdmin() || !$this->isEnabled() || !$this->config->get('plugins.visual-editor.frontend_alerts', false)) {
             return;
         }
         $page = $event['page'];
@@ -108,37 +84,65 @@ class VisualEditorPlugin extends Plugin
         $page->setRawContent('<link data-visual-editor-alerts rel="stylesheet" href="' . $href . '">' . $content);
     }
 
-    private function isPageEditor(): bool
+    private function isEnabled(): bool
     {
-        if (!$this->config->get('plugins.visual-editor.enabled', true)) {
-            return false;
-        }
-        $route = trim($this->grav['uri']->route(), '/');
-        $adminRoute = trim((string)$this->config->get('plugins.admin.route', '/admin'), '/');
-        return $route === $adminRoute . '/pages' || strpos($route, $adminRoute . '/pages/') === 0;
+        return (bool)$this->config->get('plugins.visual-editor.enabled', true);
     }
 
-    private function adminUrl(string $task): string
+    /** Recursively finds the field named `content` (any nesting: tabs, sections). */
+    private function rewriteContentField(array $fields, bool $useByDefault): array
     {
-        $route = trim((string)$this->config->get('plugins.admin.route', '/admin'), '/');
-        return $this->grav['base_url_relative'] . '/' . $route . '/task:' . $task;
+        foreach ($fields as $key => $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $name = $field['name'] ?? (is_string($key) ? $key : null);
+            if ($name === 'content' && in_array($field['type'] ?? '', ['markdown', 'editor', self::FIELD_TYPE], true)) {
+                $field['visual_editor'] = $this->clientConfig();
+                if ($useByDefault) {
+                    $field['type'] = self::FIELD_TYPE;
+                }
+                $fields[$key] = $field;
+                continue;
+            }
+            if (isset($field['fields']) && is_array($field['fields'])) {
+                $field['fields'] = $this->rewriteContentField($field['fields'], $useByDefault);
+                $fields[$key] = $field;
+            }
+        }
+
+        return $fields;
+    }
+
+    private function clientConfig(): array
+    {
+        $config = $this->config;
+        $shortcodes = $config->get('plugins.visual-editor.shortcodes', []);
+
+        return [
+            'theme' => (string)$config->get('plugins.visual-editor.theme', 'auto'),
+            'smartTypography' => (bool)$config->get('plugins.visual-editor.smart_typography', true),
+            'shortcodePreviews' => (bool)$config->get('plugins.visual-editor.shortcode_previews', true),
+            'toolbar' => preg_split('/\s*,\s*/', (string)$config->get('plugins.visual-editor.toolbar', ''), -1, PREG_SPLIT_NO_EMPTY),
+            'shortcodes' => is_array($shortcodes) ? array_values($shortcodes) : [],
+            'maxUploadBytes' => $this->uploadLimit(),
+        ];
     }
 
     private function uploadLimit(): int
     {
-        $limits = [];
+        $limits = [10 * 1024 * 1024];
         foreach (['upload_max_filesize', 'post_max_size'] as $key) {
             $value = trim((string)ini_get($key));
-            if ($value === '') {
+            if ($value === '' || $value === '0') {
                 continue;
             }
             $number = (float)$value;
             $unit = strtolower(substr($value, -1));
-            if ($unit === 'g') { $number *= 1024; }
-            if ($unit === 'm' || $unit === 'g') { $number *= 1024; }
-            if ($unit === 'k' || $unit === 'm' || $unit === 'g') { $number *= 1024; }
-            $limits[] = (int)$number;
+            $factor = ['k' => 1024, 'm' => 1024 ** 2, 'g' => 1024 ** 3][$unit] ?? 1;
+            $limits[] = (int)($number * $factor);
         }
-        return $limits ? min($limits) : 10 * 1024 * 1024;
+
+        return min($limits);
     }
 }

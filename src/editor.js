@@ -21,6 +21,14 @@ const messages = {
   visual: 'Visual', source: 'Source', saved: 'Markdown is synchronized with Grav’s page form.', copied: 'Source copied.',
 };
 
+/** A lone Markdown image or link in transferred text (always accepted when it comes from Grav's media panel). */
+const markdownMediaPattern = /^!?\[[^\]\n]*\]\([^()\s]+(?:\s+"[^"\n]*")?\)$/;
+export function markdownSnippet(transfer, fromGravMedia) {
+  const text = String(transfer?.getData?.('text/plain') || '').trim();
+  if (!text) return '';
+  return fromGravMedia || markdownMediaPattern.test(text) ? text : '';
+}
+
 function element(tag, className = '', text = '') {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -28,21 +36,34 @@ function element(tag, className = '', text = '') {
   return node;
 }
 
-function emit(textarea, name, detail) {
-  textarea.dispatchEvent(new CustomEvent(`visual-editor:${name}`, { bubbles: true, detail }));
-}
+export const defaultConfig = { theme: 'auto', smartTypography: true, shortcodePreviews: true, toolbar: defaults, maxUploadBytes: 10485760, shortcodes: [] };
 
-class VisualEditor {
-  constructor(textarea, config) {
-    this.textarea = textarea;
-    this.config = config;
+/**
+ * Host-agnostic editor. The host owns persistence: it passes the initial Markdown, gets every
+ * user edit through `onChange(markdown)`, and pushes outside changes back with `setMarkdown()`.
+ * `services` are optional async adapters: listMedia(), upload(file), pickSiteMedia(), preview(source).
+ */
+export class VisualEditor {
+  constructor(host, { markdown = '', config = {}, services = {}, onChange = () => {} } = {}) {
+    this.host = host;
+    this.services = services;
+    this.onChange = onChange;
+    this.config = {
+      ...defaultConfig, ...config,
+      hooks: {
+        preview: services.preview && config.shortcodePreviews !== false ? (source) => services.preview(source) : null,
+        editSource: (attrs, apply) => this.editSourceDialog(attrs, apply),
+        notify: (message, error) => this.notify(message, error),
+      },
+    };
     this.mode = 'visual';
-    this.originalDisplay = textarea.style.display;
+    this.markdown = String(markdown ?? '');
+    this.onKeydown = (event) => { if (event.key === 'Escape' && this.dialogElement) this.closeDialog(); };
     this.buildShell();
     this.editor = new Editor({
       element: this.content,
-      extensions: createExtensions(config),
-      content: markdownToHtml(textarea.value, config.pageMediaUrl),
+      extensions: createExtensions(this.config),
+      content: this.toHtml(this.markdown),
       editorProps: {
         attributes: { 'aria-label': 'Visual Markdown editor', role: 'textbox', 'aria-multiline': 'true', spellcheck: 'true' },
         handleDrop: (view, event, slice, moved) => this.dropFiles(event, moved),
@@ -55,10 +76,47 @@ class VisualEditor {
       onCreate: () => { this.content.querySelector('.ProseMirror')._veView = this.editor.view; },
     });
     this.bindEvents();
-    this.sync();
+    this.updateCount();
     this.updateToolbar();
-    textarea.dataset.visualEditorReady = 'true';
-    emit(textarea, 'ready', { editor: this, tiptap: this.editor });
+    this.emit('ready', { editor: this, tiptap: this.editor });
+  }
+
+  emit(name, detail) {
+    this.host.dispatchEvent(new CustomEvent(`visual-editor:${name}`, { bubbles: true, composed: true, detail }));
+  }
+
+  toHtml(markdown) { return markdownToHtml(markdown, this.config.resolveMediaUrl || this.config.pageMediaUrl || ''); }
+
+  /** Replace the content from outside (host value change). No-op when it is our own last output. */
+  setMarkdown(markdown) {
+    const value = String(markdown ?? '');
+    if (value === this.markdown) return;
+    this.markdown = value;
+    if (this.mode === 'source') this.source.value = value;
+    else this.editor.commands.setContent(this.toHtml(value), false);
+    this.updateCount();
+  }
+
+  getMarkdown() { return this.markdown; }
+
+  /** Insert a Markdown snippet at the cursor (e.g. from Admin2's media panel). */
+  insertMarkdown(snippet) {
+    const text = String(snippet ?? '');
+    if (!text) return;
+    if (this.mode === 'source') {
+      const { selectionStart: start, selectionEnd: end, value } = this.source;
+      this.source.value = value.slice(0, start) + text + value.slice(end);
+      this.sync();
+      return;
+    }
+    this.editor.chain().focus().insertContent(this.toHtml(text)).run();
+  }
+
+  destroy() {
+    this.closeDialog();
+    document.removeEventListener('keydown', this.onKeydown);
+    this.editor?.destroy();
+    this.root.remove();
   }
 
   buildShell() {
@@ -104,14 +162,7 @@ class VisualEditor {
     this.status = element('span', '', messages.saved); this.count = element('span', 've-count');
     footer.append(this.status, this.count);
     this.root.append(header, this.toolbar, this.tableBar, this.editorWrap, footer);
-    this.textarea.parentNode.insertBefore(this.root, this.textarea);
-    this.textarea.hidden = true;
-    this.textarea.style.setProperty('display', 'none', 'important');
-    this.textarea.setAttribute('aria-hidden', 'true');
-    this.textarea.classList.add('ve-original');
-    // The native resizer belongs to the source textarea we hide, not our visual surface.
-    const resizer = this.textarea.parentElement.querySelector('.grav-editor-resizer');
-    if (resizer) resizer.hidden = true;
+    this.host.append(this.root);
   }
 
   button(name, label, action, symbol = true) {
@@ -239,6 +290,12 @@ class VisualEditor {
     });
   }
 
+  editSourceDialog(attrs, apply) {
+    this.dialog(`Edit ${attrs.kind === 'shortcode' ? 'shortcode' : attrs.kind === 'code' ? 'code block' : attrs.kind.toUpperCase()} source`, [
+      { name: 'source', label: 'Source (kept exactly as written)', type: 'textarea', required: true, value: attrs.source },
+    ], ({ source }) => apply(source));
+  }
+
   insertBlock(attributes) {
     this.editor.chain().focus().insertContent({ type: 'protectedBlock', attrs: { ...attributes, preview: '' } }).run();
   }
@@ -312,91 +369,109 @@ class VisualEditor {
   closeDialog() { this.dialogElement?.remove(); this.dialogElement = null; }
 
   async mediaDialog() {
-    const items = await this.request('mediaUrl');
+    let list = [];
+    try { list = (await this.services.listMedia?.()) || []; } catch (error) { this.notify(error.message, true); }
     const body = element('div', 've-media-body');
     const grid = element('div', 've-media-grid');
-    const list = Array.isArray(items.items) ? items.items : [];
-    if (!list.length) grid.append(element('p', 've-empty', 'No images in this page’s media folder yet. Upload one below.'));
+    if (!list.length) grid.append(element('p', 've-empty', 'No images in this page’s media yet. Upload one below.'));
     list.forEach((item) => {
       const card = this.button('media', item.name, () => this.imageOptions(item));
       card.classList.add('ve-media-card');
-      const image = document.createElement('img'); image.src = item.url; image.alt = ''; image.loading = 'lazy';
+      const image = document.createElement('img'); image.src = item.thumb || item.url; image.alt = ''; image.loading = 'lazy';
       card.append(image, element('span', '', item.name)); grid.append(card);
     });
     body.append(grid);
-    this.dialog('Page media', [], () => {});
-    this.dialogElement.querySelector('form').before(body);
+    this.dialog('Insert image', [], () => {});
     const form = this.dialogElement.querySelector('form');
+    form.before(body);
     form.innerHTML = '';
-    const fileLabel = element('label', 've-field ve-upload'); fileLabel.append(element('span', '', 'Upload an image to this page'));
-    const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
-    fileLabel.append(input); form.append(fileLabel);
-    const submit = this.button('upload', 'Upload image', async () => {
-      const file = input.files?.[0];
-      if (!file) return this.notify('Choose an image first.', true);
-      if (file.size > this.config.maxUploadBytes) return this.notify('The image exceeds the upload limit.', true);
-      submit.disabled = true;
-      try { const response = await this.request('uploadUrl', {}, file); this.closeDialog(); this.imageOptions(response.item); }
-      catch (error) { this.notify(error.message, true); submit.disabled = false; }
-    });
-    submit.classList.add('ve-primary'); form.append(submit);
+    if (this.services.pickSiteMedia) {
+      const site = this.button('site-media', 'Choose from site media…', async () => {
+        const picked = await this.services.pickSiteMedia();
+        if (picked) this.imageOptions({ name: picked.alt || picked.url, path: picked.url, url: picked.display, alt: picked.alt });
+      });
+      form.append(site);
+    }
+    if (this.services.upload) {
+      const fileLabel = element('label', 've-field ve-upload'); fileLabel.append(element('span', '', 'Upload an image to this page'));
+      const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
+      fileLabel.append(input); form.append(fileLabel);
+      const submit = this.button('upload', 'Upload image', async () => {
+        const file = input.files?.[0];
+        if (!file) return this.notify('Choose an image first.', true);
+        if (file.size > this.config.maxUploadBytes) return this.notify('The image exceeds the upload limit.', true);
+        submit.disabled = true;
+        try {
+          const item = await this.services.upload(file);
+          if (!item) throw new Error('The upload did not complete.');
+          this.closeDialog(); this.imageOptions(item);
+        } catch (error) { this.notify(error.message, true); submit.disabled = false; }
+      });
+      submit.classList.add('ve-primary'); form.append(submit);
+    }
   }
 
   imageOptions(item) {
     this.dialog('Insert image', [
-      { name: 'alt', label: 'Alternative text', required: true, value: item.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') },
+      { name: 'alt', label: 'Alternative text', required: true, value: item.alt || item.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') },
       { name: 'title', label: 'Title (optional)' },
       { name: 'src', label: 'Markdown path', value: item.path, required: true },
-    ], ({ alt, title, src }) => this.editor.chain().focus().setImage({ src, alt, title }).run());
-  }
-
-  async request(urlName, fields = {}, file = null) {
-    const url = this.config[urlName];
-    if (!url) throw new Error('This operation is not configured.');
-    const data = new FormData();
-    data.append('admin-nonce', this.config.nonce || '');
-    data.append('page_route', this.config.pageRoute || '');
-    Object.entries(fields).forEach(([key, value]) => data.append(key, value));
-    if (file) data.append('file', file);
-    const response = await fetch(url, { method: 'POST', body: data, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' } });
-    let json;
-    try { json = await response.json(); } catch { throw new Error('Grav did not return a valid response. Reload and try again.'); }
-    if (!response.ok || json.status === 'error') throw new Error(json.message || 'The request failed.');
-    return json;
+    ], ({ alt, title, src }) => this.editor.chain().focus().setImage({ src, alt, title: title || null }).run());
   }
 
   dropFiles(event, moved) {
-    if (moved || !event.dataTransfer?.files?.length) return false;
+    if (moved) return false;
+    const transfer = event.dataTransfer;
+    if (transfer?.files?.length) {
+      event.preventDefault();
+      this.uploadAndInsert([...transfer.files]);
+      return true;
+    }
+    // Admin2's media panel drags `![alt](file)` as text/plain (+ application/x-grav-media):
+    // insert it as Markdown at the drop point, not as literal text.
+    const snippet = markdownSnippet(transfer, Boolean(transfer?.getData('application/x-grav-media')));
+    if (!snippet) return false;
     event.preventDefault();
-    [...event.dataTransfer.files].forEach((file) => this.uploadAndInsert(file));
+    let target = null;
+    try { target = this.editor.view.posAtCoords({ left: event.clientX, top: event.clientY }); } catch { /* no layout: keep the cursor */ }
+    if (target) this.editor.commands.setTextSelection(target.pos);
+    this.insertMarkdown(snippet);
     return true;
   }
 
   pasteFiles(event) {
-    const file = [...(event.clipboardData?.files || [])][0];
-    if (!file) return false;
-    event.preventDefault(); this.uploadAndInsert(file); return true;
+    const files = [...(event.clipboardData?.files || [])];
+    if (files.length) { event.preventDefault(); this.uploadAndInsert(files); return true; }
+    // A copied Markdown image/link (e.g. from the media panel) becomes an image/link, not text.
+    const snippet = event.clipboardData?.getData('text/html') ? '' : markdownSnippet(event.clipboardData, false);
+    if (!snippet) return false;
+    event.preventDefault(); this.insertMarkdown(snippet); return true;
   }
 
-  async uploadAndInsert(file) {
-    if (!file.type.startsWith('image/')) return this.notify('Only images can be dropped here.', true);
-    if (file.size > this.config.maxUploadBytes) return this.notify('The image exceeds the upload limit.', true);
-    this.status.textContent = `Uploading ${file.name}…`;
-    try {
-      const response = await this.request('uploadUrl', {}, file);
-      this.editor.chain().focus().setImage({ src: response.item.path, alt: file.name.replace(/\.[^.]+$/, '') }).run();
-      this.notify('Image uploaded and inserted.');
-    } catch (error) { this.notify(error.message, true); }
+  async uploadAndInsert(files) {
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    if (!images.length) return this.notify('Only images can be dropped here.', true);
+    if (!this.services.upload) return this.notify('Image upload is not available here.', true);
+    for (const file of images) {
+      if (file.size > this.config.maxUploadBytes) { this.notify(`${file.name} exceeds the upload limit.`, true); continue; }
+      this.status.textContent = `Uploading ${file.name}…`;
+      try {
+        const item = await this.services.upload(file);
+        if (!item) continue;
+        this.editor.chain().focus().setImage({ src: item.path, alt: item.alt || file.name.replace(/\.[^.]+$/, '') }).run();
+        this.notify('Image uploaded and inserted.');
+      } catch (error) { this.notify(error.message, true); }
+    }
   }
 
   setMode(mode) {
     if (mode === this.mode) return;
     if (mode === 'source') {
-      this.sync(); this.source.value = this.textarea.value;
+      this.source.value = this.markdown;
       this.content.hidden = true; this.source.hidden = false;
     } else {
-      this.textarea.value = this.source.value;
-      this.editor.commands.setContent(markdownToHtml(this.source.value, this.config.pageMediaUrl), false);
+      // Switching views must not rewrite the Markdown by itself: only a real edit re-serializes.
+      this.editor.commands.setContent(this.toHtml(this.markdown), false);
       this.content.hidden = false; this.source.hidden = true;
       this.editor.commands.focus('end');
     }
@@ -405,7 +480,7 @@ class VisualEditor {
     this.sourceButton.setAttribute('aria-pressed', String(mode === 'source'));
     this.toolbar.hidden = mode === 'source';
     this.tableBar.hidden = true;
-    this.sync(); this.updateToolbar();
+    this.updateToolbar();
   }
 
   toggleTheme() {
@@ -413,12 +488,17 @@ class VisualEditor {
     this.root.dataset.theme = current === 'dark' || (current === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark';
   }
 
+  /** Called on user edits only; reports the Markdown to the host when it actually changed. */
   sync() {
     const markdown = this.mode === 'source' ? this.source.value : documentToMarkdown(this.editor.state.doc);
-    this.textarea.value = markdown;
-    this.count.textContent = `${markdown.length.toLocaleString()} characters · Markdown`;
-    emit(this.textarea, 'change', { editor: this, markdown });
+    if (markdown === this.markdown) return;
+    this.markdown = markdown;
+    this.updateCount();
+    this.onChange(markdown);
+    this.emit('change', { editor: this, markdown });
   }
+
+  updateCount() { this.count.textContent = `${this.markdown.length.toLocaleString()} characters · Markdown`; }
 
   updateToolbar() {
     if (!this.editor) return;
@@ -440,31 +520,11 @@ class VisualEditor {
 
   bindEvents() {
     this.source.addEventListener('input', () => this.sync());
-    const form = this.textarea.closest('form');
-    form?.addEventListener('submit', () => { this.sync(); emit(this.textarea, 'save', { editor: this, markdown: this.textarea.value }); }, true);
     this.root.addEventListener('visual-editor-select-block', (event) => {
       this.editor.commands.setNodeSelection(event.detail.pos);
     });
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && this.dialogElement) this.closeDialog();
-    });
+    document.addEventListener('keydown', this.onKeydown);
     const registry = window.GravVisualEditorShortcodes;
     if (!Array.isArray(registry)) window.GravVisualEditorShortcodes = [];
   }
 }
-
-function initialize() {
-  const config = { theme: 'auto', smartTypography: true, shortcodePreviews: true, toolbar: defaults, maxUploadBytes: 10485760, ...(window.GravVisualEditorConfig || {}) };
-  document.querySelectorAll('textarea[data-grav-editor]:not([data-visual-editor-ready])').forEach((textarea) => {
-    if (textarea.disabled || textarea.readOnly) return;
-    try { emit(textarea, 'before-init', { config }); new VisualEditor(textarea, config); }
-    catch (error) {
-      textarea.hidden = false; textarea.style.display = ''; textarea.removeAttribute('aria-hidden');
-      document.querySelectorAll('.ve-editor').forEach((root) => { if (root.nextSibling === textarea) root.remove(); });
-      console.error('Grav Visual Editor could not initialize; source editing remains available.', error);
-    }
-  });
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });
-else initialize();

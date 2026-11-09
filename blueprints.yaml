@@ -1,18 +1,19 @@
 name: Grav Visual Editor
 slug: visual-editor
 type: plugin
-version: 1.0.0
-description: A Markdown-preserving visual block editor for Grav with tables, alerts, media and shortcode support.
+version: 2.0.0
+description: A Markdown-preserving visual editor for Grav Admin2 with tables, alerts, media and shortcode support.
 icon: edit
 author:
-  name: Grav Visual Editor contributors
-  email: hello@example.invalid
-homepage: https://getgrav.org/
+  name: Enkirche
+  email: dave@enkirche.fr
+  homepage: https://github.com/manubarnum/grav-plugin-visual-editor
 keywords: [editor, markdown, wysiwym, admin, blocks, tiptap]
 license: MIT
 dependencies:
-  - { name: grav, version: '>=1.7.0' }
-  - { name: admin, version: '>=1.10.0' }
+  - { name: grav, version: '>=2.2.18' }
+  - { name: api, version: '>=1.1.14' }
+  - { name: admin2, version: '>=2.2.0' }
 form:
   validation: loose
   fields:
@@ -29,6 +30,12 @@ form:
               label: Enable plugin
               default: 1
               options: { 1: Enabled, 0: Disabled }
+            site_default:
+              type: toggle
+              label: Default content editor for the whole site
+              help: 'Users can still pick another editor (e.g. CodeMirror) under Content editor in their profile; Expert mode always uses the code editor.'
+              default: 1
+              options: { 1: Enabled, 0: Disabled }
             theme:
               type: select
               label: Editor appearance
@@ -39,10 +46,17 @@ form:
               label: Smart typography
               default: 1
               options: { 1: Enabled, 0: Disabled }
+            shortcode_previews:
+              type: toggle
+              label: Shortcode previews
+              help: Renders shortcode blocks through shortcode-core on demand. Raw HTML and Twig are never executed.
+              default: 1
+              options: { 1: Enabled, 0: Disabled }
             frontend_alerts:
               type: toggle
               label: GitHub alert styles on public pages
-              default: 1
+              help: Leave off if the Github Markdown Alerts plugin already styles them.
+              default: 0
               options: { 1: Enabled, 0: Disabled }
             toolbar:
               type: textarea

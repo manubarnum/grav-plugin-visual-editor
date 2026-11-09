@@ -7,20 +7,27 @@ import AdmZip from 'adm-zip';
 const root = process.cwd();
 const output = join(root, 'dist');
 const plugin = join(output, 'visual-editor');
+// Admin2 discovers custom fields at admin-next/fields/<type>.js and imports them as ES modules.
+const fieldModule = join('admin-next', 'fields', 'visual-editor.js');
 await rm(output, { recursive: true, force: true });
-await mkdir(join(plugin, 'assets', 'js'), { recursive: true });
+await mkdir(join(plugin, 'admin-next', 'fields'), { recursive: true });
 
+const editorCss = await readFile(join(root, 'assets', 'css', 'editor.css'), 'utf8');
 await build({
-  entryPoints: [join(root, 'src', 'editor.js')],
+  entryPoints: [join(root, 'src', 'admin2-field.js')],
   bundle: true,
-  format: 'iife',
+  format: 'esm',
   target: ['es2020'],
   platform: 'browser',
-  outfile: join(plugin, 'assets', 'js', 'editor.js'),
+  outfile: join(plugin, fieldModule),
+  define: { __VE_CSS__: JSON.stringify(editorCss) },
   minify: true,
   legalComments: 'eof',
   sourcemap: false,
 });
+// The repository is itself an installable plugin: keep its committed copy in sync.
+await mkdir(join(root, 'admin-next', 'fields'), { recursive: true });
+await copyFile(join(plugin, fieldModule), join(root, fieldModule));
 
 for (const file of ['visual-editor.php', 'visual-editor.yaml', 'blueprints.yaml', 'composer.json', 'README.md', 'CHANGELOG.md', 'LICENSE']) {
   await copyFile(join(root, file), join(plugin, file));
@@ -34,7 +41,9 @@ async function copyTree(folder) {
   }
 }
 await copyTree('classes');
-await copyTree('assets/css');
+// editor.css is bundled into the field module; only the front-end alert styles ship as a file.
+await mkdir(join(plugin, 'assets', 'css'), { recursive: true });
+await copyFile(join(root, 'assets', 'css', 'alerts.css'), join(plugin, 'assets', 'css', 'alerts.css'));
 
 const notices = ['MIT License notices for bundled dependencies:'];
 for (const folder of await readdir(join(root, 'node_modules', '@tiptap'))) {

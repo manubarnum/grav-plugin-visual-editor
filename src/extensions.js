@@ -50,11 +50,39 @@ const ImageWithSource = Image.extend({
       src: { default: null, parseHTML: (element) => element.getAttribute('data-markdown-src') || element.getAttribute('src') },
     };
   },
+  addOptions() { return { ...this.parent?.(), resolve: null }; },
   renderHTML({ HTMLAttributes }) {
     const { align, float, ...attributes } = HTMLAttributes;
-    return ['img', mergeAttributes(attributes)];
+    // Markdown keeps the page-relative path; the editor shows the resolved media URL.
+    const markdownSrc = attributes.src || '';
+    const display = resolveMedia(this.options.resolve, markdownSrc);
+    return ['img', mergeAttributes(attributes, { src: display, 'data-markdown-src': markdownSrc })];
   },
 });
+
+/** Resolves a Markdown image path for display; `resolver` is a URL prefix or a function. */
+export function resolveMedia(resolver, src) {
+  if (!src || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(src)) return src;
+  if (typeof resolver === 'function') return resolver(src) || src;
+  return resolver ? resolver + src : src;
+}
+
+const blockedPreviewTags = 'script,iframe,object,embed,link,meta,base,form,style';
+/** Shortcode previews are server HTML shown inside the admin: drop active content before inserting it. */
+export function sanitizePreview(html) {
+  const template = document.createElement('template');
+  template.innerHTML = String(html ?? '');
+  template.content.querySelectorAll(blockedPreviewTags).forEach((node) => node.remove());
+  template.content.querySelectorAll('*').forEach((node) => {
+    [...node.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith('on') || (['href', 'src', 'xlink:href', 'action', 'formaction'].includes(name) && /^\s*(?:javascript|data|vbscript):/i.test(attribute.value))) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+  });
+  return template.content;
+}
 
 const BlockquoteWithAlert = Node.create({
   name: 'blockquote', content: 'block+', group: 'block', defining: true,
@@ -97,7 +125,10 @@ const ProtectedBlock = Node.create({
   },
   parseHTML() { return [{ tag: 've-protected', getAttrs: (element) => ({ source: element.getAttribute('data-source'), kind: element.getAttribute('data-kind') }) }]; },
   renderHTML() { return ['ve-protected', { contenteditable: 'false' }]; },
+  /** Host hooks: `preview(source) → html`, `editSource(attrs, apply)`, `notify(message, isError)`. */
+  addOptions() { return { preview: null, editSource: null, notify: null }; },
   addNodeView() {
+    const options = this.options;
     return ({ node, editor, getPos }) => {
       const dom = document.createElement('section');
       dom.className = `ve-protected ve-protected-${node.attrs.kind}`;
@@ -108,27 +139,30 @@ const ProtectedBlock = Node.create({
       label.textContent = names[node.attrs.kind] || 'Protected source';
       const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit source';
       const previewButton = document.createElement('button'); previewButton.type = 'button'; previewButton.textContent = 'Preview';
-      previewButton.hidden = node.attrs.kind !== 'shortcode';
+      previewButton.hidden = node.attrs.kind !== 'shortcode' || typeof options.preview !== 'function';
       header.append(label, edit, previewButton); dom.append(header);
       const pre = document.createElement('pre'); pre.textContent = node.attrs.source; dom.append(pre);
       let preview;
+      const apply = (value) => {
+        if (value === null || value === undefined || typeof getPos !== 'function') return;
+        editor.chain().focus().command(({ tr }) => { tr.setNodeMarkup(getPos(), undefined, { ...node.attrs, source: String(value) }); return true; }).run();
+      };
       edit.addEventListener('click', () => {
-        const value = window.prompt('Edit the source without changing its format:', node.attrs.source);
-        if (value === null || typeof getPos !== 'function') return;
-        editor.chain().focus().command(({ tr }) => { tr.setNodeMarkup(getPos(), undefined, { ...node.attrs, source: value }); return true; }).run();
+        // window.prompt is single-line and would flatten multi-line HTML/Twig: prefer the host dialog.
+        if (typeof options.editSource === 'function') options.editSource({ ...node.attrs }, apply);
+        else apply(window.prompt('Edit the source without changing its format:', node.attrs.source));
       });
       previewButton.addEventListener('click', async () => {
         previewButton.disabled = true;
         try {
-          const response = await editor.storage.visualEditor.request('previewUrl', { source: node.attrs.source });
+          const html = await options.preview(node.attrs.source);
           preview = preview || document.createElement('div');
           preview.className = 've-shortcode-preview';
-          if (response.status === 'success') preview.innerHTML = response.html || '';
-          else preview.textContent = response.message || 'Preview is unavailable.';
+          preview.replaceChildren(sanitizePreview(html));
           if (!preview.isConnected) dom.append(preview);
           else preview.hidden = !preview.hidden;
         } catch (error) {
-          editor.storage.visualEditor.notify(error.message, true);
+          options.notify?.(error.message || 'Preview is unavailable.', true);
         } finally { previewButton.disabled = false; }
       });
       return { dom, update(updated) { if (updated.type.name !== 'protectedBlock') return false; node = updated; pre.textContent = node.attrs.source; return true; } };
@@ -200,6 +234,7 @@ export function blockHandlePlugin() {
   });
 }
 
+/** `pageMediaUrl` is a URL prefix or a `(src) => url` resolver for page-relative images. */
 export function markdownToHtml(markdown, pageMediaUrl = '') {
   const protectedMarkdown = protectBlocks(markdown);
   const parsed = markdownTables(protectedMarkdown, (cell) => marked.parseInline(protectInline(cell)));
@@ -238,10 +273,10 @@ export function createExtensions(config) {
     FlexibleListItem,
     Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: null } }),
     CodeBlock,
-    ImageWithSource.configure({ inline: false, allowBase64: false }),
+    ImageWithSource.configure({ inline: false, allowBase64: false, resolve: config.resolveMediaUrl || config.pageMediaUrl || null }),
     Highlight.configure({ multicolor: false }),
     Subscript, Superscript, Keyboard, Citation, Abbreviation,
-    BlockquoteWithAlert, AlertTitle, ProtectedBlock, InlineRaw,
+    BlockquoteWithAlert, AlertTitle, ProtectedBlock.configure(config.hooks || {}), InlineRaw,
     Table.configure({ resizable: true, lastColumnResizable: true, cellMinWidth: 64 }), TableRow, AlignedTableHeader, AlignedTableCell,
     ...(config.smartTypography ? [Typography] : []),
     BlockDrag,

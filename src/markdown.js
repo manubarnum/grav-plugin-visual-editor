@@ -136,7 +136,9 @@ export function addMediaAttributes(html, pageMediaUrl = '') {
     img.setAttribute('data-markdown-src', img.getAttribute('src') || '');
     img.setAttribute('alt', img.getAttribute('alt') || '');
     const src = img.getAttribute('src') || '';
-    if (!/^(?:[a-z]+:|\/|#|data:)/i.test(src)) img.src = pageMediaUrl + src;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(src)) return;
+    const resolved = typeof pageMediaUrl === 'function' ? pageMediaUrl(src) : pageMediaUrl + src;
+    if (resolved) img.src = resolved;
   });
   return template.innerHTML;
 }
