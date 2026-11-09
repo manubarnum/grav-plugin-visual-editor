@@ -1,6 +1,7 @@
 enabled: true
 site_default: true
 shortcode_previews: true
+page_background: true
 theme: auto
 smart_typography: true
 frontend_alerts: false

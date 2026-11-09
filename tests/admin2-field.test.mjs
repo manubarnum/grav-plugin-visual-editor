@@ -258,6 +258,26 @@ test('colored block: wrap the selection, change its color, remove it', () => {
   el.remove();
 });
 
+test('the editing surface previews the page background color from the form', () => {
+  const form = { 'header.background_color': '#1d3557' };
+  const el = document.createElement(tag);
+  el.field = { name: 'content', visual_editor: {} };
+  el.getValue = (path) => form[path];
+  el.value = 'Text\n';
+  document.body.append(el);
+  assert.deepEqual(el.watch, ['header.background_color']);
+  const wrap = el.editor.editorWrap;
+  assert.match(wrap.style.background, /rgb\(29, 53, 87\)|#1d3557/);
+  assert.equal(wrap.style.getPropertyValue('--ve-text'), '#ffffff');
+  form['header.background_color'] = '#fde2e4';
+  el.formChanged();
+  assert.equal(wrap.style.getPropertyValue('--ve-text'), '#1f2329');
+  form['header.background_color'] = 'red;} body {';
+  el.formChanged();
+  assert.equal(wrap.style.background, '', 'unsafe values are ignored');
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

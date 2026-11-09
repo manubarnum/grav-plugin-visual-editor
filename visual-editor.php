@@ -24,6 +24,9 @@ class VisualEditorPlugin extends Plugin
     /** Admin2 custom field type: `admin-next/fields/<type>.js`, also the content_editor preference value. */
     public const FIELD_TYPE = 'visual-editor';
 
+    /** Page frontmatter key holding the page background color. */
+    public const BACKGROUND_FIELD = 'header.background_color';
+
     public static function getSubscribedEvents(): array
     {
         return [
@@ -31,6 +34,7 @@ class VisualEditorPlugin extends Plugin
             'onApiBlueprintResolved' => [['onApiBlueprintResolved', 0]],
             'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0]],
             'onPageContentRaw' => [['addAlertStyles', 0]],
+            'onTwigSiteVariables' => [['addPageBackground', 0]],
         ];
     }
 
@@ -62,6 +66,67 @@ class VisualEditorPlugin extends Plugin
         $event['fields'] = $this->rewriteContentField($event['fields'], $useByDefault);
     }
 
+    /** Front end: paint the page with its `background_color` (frontmatter), text color picked for contrast. */
+    public function addPageBackground(): void
+    {
+        if ($this->isAdmin() || !$this->isEnabled() || !$this->config->get('plugins.visual-editor.page_background', true)) {
+            return;
+        }
+        $page = $this->grav['page'] ?? null;
+        if (!$page || !method_exists($page, 'header')) {
+            return;
+        }
+        $color = self::safeColor((string)($page->header()->background_color ?? ''));
+        if ($color === null) {
+            return;
+        }
+        $text = self::contrastText($color);
+        $muted = $text === '#ffffff' ? 'rgba(255,255,255,.72)' : 'rgba(31,35,41,.68)';
+        // Quark 2 (Blades/Pico) paints from these variables in both light and dark mode; the plain
+        // html/body rules cover other themes. `html:root[data-theme]` outranks the theme's own selectors.
+        $css = "html:root,html:root[data-theme]{--q2-bg:{$color};--pico-background-color:{$color};"
+            . "--q2-text:{$text};--q2-text-strong:{$text};--q2-text-muted:{$muted};--pico-color:{$text};--pico-muted-color:{$muted}}"
+            . "html,body{background-color:{$color};color:{$text}}";
+        $this->grav['assets']->addInlineCss($css, ['priority' => 5]);
+    }
+
+    /** A CSS color we can safely print: hex, rgb[a]() or hsl[a]() with plain numbers only. */
+    public static function safeColor(string $value): ?string
+    {
+        $value = strtolower(trim($value));
+        if (preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/', $value)
+            || preg_match('/^(?:rgb|hsl)a?\(\s*[0-9.]+(?:deg)?%?\s*(?:[,\s\/]\s*[0-9.]+%?\s*){2,3}\)$/', $value)) {
+            return $value;
+        }
+
+        return null;
+    }
+
+    /** Dark or white text for a background (WCAG relative luminance); dark text when unknown. */
+    public static function contrastText(string $color): string
+    {
+        $rgb = null;
+        if (preg_match('/^#([0-9a-f]{3,8})$/', $color, $m)) {
+            $hex = $m[1];
+            if (strlen($hex) <= 4) {
+                $hex = preg_replace('/(.)/', '$1$1', $hex);
+            }
+            $rgb = [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
+        } elseif (preg_match('/^rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)/', $color, $m)) {
+            $rgb = [(float)$m[1], (float)$m[2], (float)$m[3]];
+        }
+        if ($rgb === null) {
+            return '#1f2329';
+        }
+        $channel = static function (float $value): float {
+            $value /= 255;
+            return $value <= 0.03928 ? $value / 12.92 : (($value + 0.055) / 1.055) ** 2.4;
+        };
+        $luminance = 0.2126 * $channel($rgb[0]) + 0.7152 * $channel($rgb[1]) + 0.0722 * $channel($rgb[2]);
+
+        return $luminance > 0.36 ? '#1f2329' : '#ffffff';
+    }
+
     public function onApiRegisterRoutes(Event $event): void
     {
         if (!$this->isEnabled()) {
@@ -91,6 +156,44 @@ class VisualEditorPlugin extends Plugin
 
     /** Recursively finds the field named `content` (any nesting: tabs, sections). */
     private function rewriteContentField(array $fields, bool $useByDefault): array
+    {
+        $isList = array_keys($fields) === range(0, count($fields) - 1);
+        $out = [];
+        foreach ($this->rewriteContentFieldIn($fields, $useByDefault) as $key => $field) {
+            // Lists are rebuilt by appending, so an inserted field never takes (or loses) a sibling's index.
+            if ($isList) {
+                $out[] = $field;
+            } else {
+                $out[$key] = $field;
+            }
+            // Page background color right below the editor (lists only: Admin2 serializes field lists).
+            if ($isList && is_array($field) && ($field['name'] ?? null) === 'content' && isset($field['visual_editor'])
+                && $this->config->get('plugins.visual-editor.page_background', true) && !$this->hasField($fields, self::BACKGROUND_FIELD)) {
+                $out[] = [
+                    'name' => self::BACKGROUND_FIELD,
+                    'type' => 'colorpicker',
+                    'label' => 'Page background color',
+                    'help' => 'Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.',
+                    'toggleable' => true,
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    private function hasField(array $fields, string $name): bool
+    {
+        foreach ($fields as $field) {
+            if (is_array($field) && ($field['name'] ?? null) === $name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function rewriteContentFieldIn(array $fields, bool $useByDefault): array
     {
         foreach ($fields as $key => $field) {
             if (!is_array($field)) {

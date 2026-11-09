@@ -10,6 +10,11 @@
  * echoes every reported value back through the `value` setter.
  */
 import { VisualEditor } from './editor.js';
+import { contrastText } from './markdown.js';
+
+/** Page frontmatter field (added next to the editor by visual-editor.php) previewed as the editing surface color. */
+const PAGE_BACKGROUND = 'header.background_color';
+const safeCssColor = /^(?:#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([\d\s.,%\/deg]+\))$/i;
 
 /* global __VE_CSS__ */
 const STYLE_ID = 'grav-visual-editor-styles';
@@ -59,6 +64,27 @@ export class VisualEditorField extends HTMLElement {
     this._value = '';
     this.editor = null;
     this.uploaded = new Map();
+    // Admin2 calls formChanged() when a watched form value changes (CustomFieldWrapper.svelte).
+    this.watch = [PAGE_BACKGROUND];
+  }
+
+  formChanged() { this.applyPageBackground(); }
+
+  /** Preview the page background color on the editing surface, with readable text. */
+  applyPageBackground() {
+    const wrap = this.editor?.editorWrap;
+    if (!wrap) return;
+    const raw = typeof this.getValue === 'function' ? this.getValue(PAGE_BACKGROUND) : null;
+    const color = typeof raw === 'string' && safeCssColor.test(raw.trim()) ? raw.trim() : '';
+    wrap.style.background = color;
+    if (color) {
+      const text = contrastText(color);
+      wrap.style.setProperty('--ve-text', text);
+      wrap.style.setProperty('--ve-muted', text === '#ffffff' ? 'rgba(255,255,255,.72)' : 'rgba(31,35,41,.68)');
+    } else {
+      wrap.style.removeProperty('--ve-text');
+      wrap.style.removeProperty('--ve-muted');
+    }
   }
 
   set field(field) { this._field = field || null; }
@@ -90,6 +116,7 @@ export class VisualEditorField extends HTMLElement {
       },
     });
     if (readonly) this.editor.editor.setEditable(false);
+    this.applyPageBackground();
     // Admin2's media panel "insert" button asks the active editor to insert at the cursor.
     this.onInsert = (event) => {
       if (!this.isConnected || event.detail?.mode !== 'insert-at-cursor' || typeof event.detail.content !== 'string') return;

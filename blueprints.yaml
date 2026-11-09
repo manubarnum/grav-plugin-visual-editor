@@ -52,6 +52,12 @@ form:
               help: Renders shortcode blocks through shortcode-core on demand. Raw HTML and Twig are never executed.
               default: 1
               options: { 1: Enabled, 0: Disabled }
+            page_background:
+              type: toggle
+              label: Page background color
+              help: Adds a "Page background color" field under the content editor; the page is painted with it on the site, with readable text.
+              default: 1
+              options: { 1: Enabled, 0: Disabled }
             frontend_alerts:
               type: toggle
               label: GitHub alert styles on public pages

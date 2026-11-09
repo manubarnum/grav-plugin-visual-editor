@@ -304,11 +304,19 @@ export function colorFromOpen(open) {
 
 /** Dark or white text, whichever reads better on the background (WCAG relative luminance). */
 export function contrastText(color) {
-  if (!isHexColor(color)) return '#1f2329';
-  let hex = color.trim().slice(1);
-  if (hex.length === 3) hex = hex.replace(/./g, '$&$&');
-  const [r, g, b] = [0, 2, 4].map((at) => {
-    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+  const value = String(color ?? '').trim();
+  let rgb = null;
+  if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) {
+    let hex = value.slice(1);
+    if (hex.length <= 4) hex = hex.replace(/./g, '$&$&');
+    rgb = [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  } else {
+    const match = value.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+    if (match) rgb = match.slice(1, 4).map(Number);
+  }
+  if (!rgb) return '#1f2329';
+  const [r, g, b] = rgb.map((value8) => {
+    const channel = value8 / 255;
     return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
   });
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
