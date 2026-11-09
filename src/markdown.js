@@ -74,6 +74,17 @@ export function protectBlocks(markdown) {
       out.push(protectedBlock(block.join('\n'), kind));
       continue;
     }
+    // Per-table style wrapper: `[div class="ve-table-plain"]` / `ve-table-normal` around one table.
+    const tableStyle = line.match(tableStyleOpen);
+    if (tableStyle) {
+      const end = extractShortcode(lines, i);
+      if (end > i && lines[end].trim() === '[/div]') {
+        const inner = protectBlocks(lines.slice(i + 1, end).join('\n')).trim();
+        out.push(`<div data-ve-table-style="${tableStyle[1]}">\n\n${inner}\n\n</div>\n`);
+        i = end + 1;
+        continue;
+      }
+    }
     // Block alignment shortcodes (shortcode-core) on their own lines: keep their content editable.
     const align = line.match(alignBlockOpen);
     if (align) {
@@ -189,6 +200,10 @@ export function nodeToMarkdown(node, depth = 0) {
     case 'text': return node.text || '';
     case 'hardBreak': return '\\\n';
     case 'protectedBlock': return node.attrs.source;
+    case 'tableStyle': {
+      const body = blocks();
+      return `[div class="ve-table-${node.attrs.style}"]\n\n${body ? body + '\n\n' : ''}[/div]`;
+    }
     case 'alignBlock': {
       const body = blocks();
       return `[${node.attrs.align}]\n\n${body ? body + '\n\n' : ''}[/${node.attrs.align}]`;
@@ -306,6 +321,10 @@ export function withImageWidth(src, width) {
  * Colored blocks are shortcode-core `[div]` shortcodes marked with the `ve-block` class, so Grav renders
  * them without raw HTML: `[div class="ve-block" style="background-color:#fde2e4;color:#1f2329;…"]`.
  */
+/** Table look: `plain` (no background or borders) or `normal` (theme look, even when tables are plain site-wide). */
+export const tableStyles = ['plain', 'normal'];
+const tableStyleOpen = /^\s*\[div class="ve-table-(plain|normal)"\]\s*$/;
+
 /** shortcode-core's block alignment shortcodes: `[center]` … `[/center]`, each tag on its own line. */
 export const alignments = ['left', 'center', 'right', 'justify'];
 const alignBlockOpen = /^\s*\[(left|center|right|justify)\]\s*$/;

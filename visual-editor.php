@@ -34,7 +34,7 @@ class VisualEditorPlugin extends Plugin
             'onApiBlueprintResolved' => [['onApiBlueprintResolved', 0]],
             'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0]],
             'onPageContentRaw' => [['addAlertStyles', 0]],
-            'onTwigSiteVariables' => [['addPageBackground', 0]],
+            'onTwigSiteVariables' => [['addPageBackground', 0], ['addTableStyles', 0]],
         ];
     }
 
@@ -93,6 +93,36 @@ class VisualEditorPlugin extends Plugin
             . "--q2-text:{$text};--q2-text-strong:{$text};--q2-text-muted:{$muted};--pico-color:{$text};--pico-muted-color:{$muted}}"
             . "html,body{background-color:{$color};color:{$text}}";
         $this->grav['assets']->addInlineCss($css, ['priority' => 5]);
+    }
+
+    /**
+     * Front end: tables without background or borders, site-wide (`plain_tables`) and per table
+     * (`[div class="ve-table-plain"]`; `ve-table-normal` keeps the theme look when the site option is on).
+     */
+    public function addTableStyles(): void
+    {
+        if ($this->isAdmin() || !$this->isEnabled()) {
+            return;
+        }
+        $css = '';
+        if ($this->config->get('plugins.visual-editor.plain_tables', false)) {
+            $css .= self::plainTableCss('table:not(.ve-table-normal table)');
+        }
+        $page = $this->grav['page'] ?? null;
+        $raw = $page && method_exists($page, 'rawMarkdown') ? (string)$page->rawMarkdown() : '';
+        if (strpos($raw, 've-table-plain') !== false) {
+            $css .= self::plainTableCss('.ve-table-plain table');
+        }
+        if ($css !== '') {
+            $this->grav['assets']->addInlineCss($css, ['priority' => 5]);
+        }
+    }
+
+    /** CSS removing backgrounds and borders from the tables matched by `$table`. */
+    public static function plainTableCss(string $table): string
+    {
+        return "{$table}{--pico-table-row-stripped-background-color:transparent;--pico-table-border-color:transparent;background:transparent!important;border:0!important}"
+            . "{$table} :is(thead,tbody,tfoot,tr,th,td){background:transparent!important;border:0!important;box-shadow:none!important}";
     }
 
     /** A CSS color we can safely print: hex, rgb[a]() or hsl[a]() with plain numbers only. */
@@ -234,6 +264,7 @@ class VisualEditorPlugin extends Plugin
             'toolbar' => preg_split('/\s*,\s*/', (string)$config->get('plugins.visual-editor.toolbar', ''), -1, PREG_SPLIT_NO_EMPTY),
             'shortcodes' => is_array($shortcodes) ? array_values($shortcodes) : [],
             'maxUploadBytes' => $this->uploadLimit(),
+            'plainTables' => (bool)$config->get('plugins.visual-editor.plain_tables', false),
         ];
     }
 

@@ -171,6 +171,16 @@ const BlockquoteWithAlert = Node.create({
   },
 });
 
+/** A table with its own look, saved as `[div class="ve-table-plain|normal"]` around the table. */
+const TableStyle = Node.create({
+  name: 'tableStyle', group: 'block', content: 'table', defining: true, isolating: true,
+  addAttributes() { return { style: { default: 'plain' } }; },
+  parseHTML() {
+    return [{ tag: 'div[data-ve-table-style]', getAttrs: (element) => ({ style: element.getAttribute('data-ve-table-style') === 'normal' ? 'normal' : 'plain' }) }];
+  },
+  renderHTML({ node }) { return ['div', { class: 've-table-style', 'data-style': node.attrs.style }, 0]; },
+});
+
 /** Editable aligned block, saved as shortcode-core `[center]` … `[/center]` (also left/right/justify). */
 const AlignBlock = Node.create({
   name: 'alignBlock', group: 'block', content: 'block+', defining: true,
@@ -379,7 +389,7 @@ export function createExtensions(config) {
     ImageWithSource.configure({ inline: false, allowBase64: false, resolve: config.resolveMediaUrl || config.pageMediaUrl || null }),
     Highlight.configure({ multicolor: false }),
     Subscript, Superscript, Keyboard, Citation, Abbreviation,
-    BlockquoteWithAlert, AlertTitle, ColorBlock, AlignBlock, ProtectedBlock.configure(config.hooks || {}), InlineRaw,
+    BlockquoteWithAlert, AlertTitle, ColorBlock, AlignBlock, TableStyle, ProtectedBlock.configure(config.hooks || {}), InlineRaw,
     Table.configure({ resizable: true, lastColumnResizable: true, cellMinWidth: 64 }), TableRow, AlignedTableHeader, AlignedTableCell,
     ...(config.smartTypography ? [Typography] : []),
     BlockDrag,

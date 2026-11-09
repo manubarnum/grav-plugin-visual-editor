@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { alertKinds, alignments, colorBlockTag, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
+import { alertKinds, alignments, colorBlockTag, tableStyles, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
 
 const icons = {
   undo: '↶', redo: '↷', heading: 'H', bold: 'B', italic: 'I', strike: 'S', link: '🔗', image: '▧',
@@ -122,6 +122,7 @@ export class VisualEditor {
   buildShell() {
     this.root = element('div', 've-editor');
     this.root.dataset.theme = this.config.theme || 'auto';
+    if (this.config.plainTables) this.root.classList.add('ve-plain-tables');
     const header = element('div', 've-header');
     const identity = element('div', 've-identity');
     identity.append(element('span', 've-mark', '✎'), element('div', '', 'Visual editor'));
@@ -151,7 +152,7 @@ export class VisualEditor {
     const tableCommands = [
       ['addRowBefore', '+ Row above'], ['addRowAfter', '+ Row below'], ['addColumnBefore', '+ Column before'], ['addColumnAfter', '+ Column after'],
       ['deleteRow', 'Delete row'], ['deleteColumn', 'Delete column'], ['mergeCells', 'Merge cells'], ['splitCell', 'Split cell'],
-      ['alignLeft', 'Align left'], ['alignCenter', 'Align center'], ['alignRight', 'Align right'], ['toggleHeaderRow', 'Header row'], ['deleteTable', 'Delete table'],
+      ['alignLeft', 'Align left'], ['alignCenter', 'Align center'], ['alignRight', 'Align right'], ['toggleHeaderRow', 'Header row'], ['tableStyle', 'Table style…'], ['deleteTable', 'Delete table'],
     ];
     tableCommands.forEach(([command, label]) => this.tableBar.append(this.button(command, label, () => this.tableCommand(command))));
     // Shown while an image is selected; widths become Grav's `?cropResize=` (resized copy, ratio kept).
@@ -292,8 +293,15 @@ export class VisualEditor {
     return true;
   }
 
+  /** Replace a wrapper by its content, keeping the cursor where it was in that content. */
   unwrapBlock({ node, pos }) {
-    this.editor.chain().focus().command(({ tr }) => { tr.replaceWith(pos, pos + node.nodeSize, node.content); return true; }).run();
+    const { from, to } = this.editor.state.selection;
+    const inside = from > pos && to < pos + node.nodeSize;
+    this.editor.chain().focus().command(({ tr }) => {
+      tr.replaceWith(pos, pos + node.nodeSize, node.content);
+      if (inside) tr.setSelection(TextSelection.between(tr.doc.resolve(from - 1), tr.doc.resolve(to - 1)));
+      return true;
+    }).run();
   }
 
   /** Left is the default alignment: choosing it removes the alignment block. Tables align the column instead. */
@@ -434,7 +442,43 @@ export class VisualEditor {
     ], ({ alt, title }) => { this.editor.commands.setNodeSelection(image.pos); this.updateImage({ alt, title: title || null }); });
   }
 
+  /** Table look: site default (no wrapper), or a `plain` / `normal` wrapper around this table. */
+  tableStyleDialog() {
+    const table = this.findAncestor('table');
+    if (!table) return;
+    const wrapper = this.findAncestor('tableStyle');
+    const parent = this.editor.state.doc.resolve(table.pos).parent.type.name;
+    this.dialog('Table style', [
+      { name: 'style', label: 'Look of this table', type: 'select', value: wrapper?.node.attrs.style || 'default', options: [
+        ['default', this.config.plainTables ? 'Site default (no background or borders)' : 'Site default (background and borders)'],
+        ['plain', 'No background or borders'],
+        ['normal', 'Background and borders'],
+      ] },
+    ], ({ style }) => {
+      if (wrapper) {
+        if (style === 'default') return this.unwrapBlock(wrapper);
+        if (tableStyles.includes(style)) this.editor.chain().focus().command(({ tr }) => { tr.setNodeMarkup(wrapper.pos, undefined, { style }); return true; }).run();
+        return;
+      }
+      if (!tableStyles.includes(style)) return;
+      // The wrapper is a shortcode: its tags must start their line, so not inside a list or quote.
+      if (!['doc', 'colorBlock', 'alignBlock'].includes(parent)) return this.notify('Move the table out of the list or quote to change its style.', true);
+      const type = this.editor.state.schema.nodes.tableStyle;
+      const { from, to } = this.editor.state.selection;
+      this.editor.chain().focus().command(({ tr }) => {
+        tr.replaceWith(table.pos, table.pos + table.node.nodeSize, type.create({ style }, table.node));
+        // The wrapper adds one opening position before the table: keep the cursor in the same cell.
+        tr.setSelection(TextSelection.between(tr.doc.resolve(from + 1), tr.doc.resolve(to + 1)));
+        return true;
+      }).run();
+    });
+  }
+
   tableCommand(command) {
+    if (command === 'tableStyle') return this.tableStyleDialog();
+    // A style wrapper cannot stay empty: delete it with its table.
+    const wrapper = command === 'deleteTable' ? this.findAncestor('tableStyle') : null;
+    if (wrapper) return this.editor.chain().focus().command(({ tr }) => { tr.delete(wrapper.pos, wrapper.pos + wrapper.node.nodeSize); return true; }).run();
     const chain = this.editor.chain().focus();
     if (command.startsWith('align')) return chain.setCellAttribute('align', command.slice(5).toLowerCase()).run();
     return chain[command]().run();

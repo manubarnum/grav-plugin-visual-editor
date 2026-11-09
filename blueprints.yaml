@@ -58,6 +58,12 @@ form:
               help: Adds a "Page background color" field under the content editor; the page is painted with it on the site, with readable text.
               default: 1
               options: { 1: Enabled, 0: Disabled }
+            plain_tables:
+              type: toggle
+              label: Tables without background or borders
+              help: Applies to every table on the site. A single table can still be set otherwise from the editor (table bar → Table style).
+              default: 0
+              options: { 1: Enabled, 0: Disabled }
             frontend_alerts:
               type: toggle
               label: GitHub alert styles on public pages

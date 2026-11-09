@@ -315,6 +315,34 @@ test('alignment buttons align the column inside a table', () => {
   el.remove();
 });
 
+test('table style: plain, normal, back to site default, and deleting a styled table', () => {
+  const table = '| A | B |\n| --- | --- |\n| 1 | 2 |\n';
+  const { el, changes } = mount(`${table}\nAfter\n`);
+  const editor = el.editor;
+  const choose = (style) => {
+    editor.tableBar.querySelector('[data-action="tableStyle"]').click();
+    editor.dialogElement.querySelector('select[name="style"]').value = style;
+    editor.dialogElement.querySelector('button[type="submit"]').click();
+  };
+  editor.editor.commands.setTextSelection(4);
+  assert.equal(editor.tableBar.hidden, false);
+
+  choose('plain');
+  assert.equal(changes.at(-1), `[div class="ve-table-plain"]\n\n${table}\n[/div]\n\nAfter\n`);
+  assert.equal(el.querySelector('.ProseMirror .ve-table-style').getAttribute('data-style'), 'plain');
+
+  choose('normal');
+  assert.equal(changes.at(-1), `[div class="ve-table-normal"]\n\n${table}\n[/div]\n\nAfter\n`);
+
+  choose('default');
+  assert.equal(changes.at(-1), `${table}\nAfter\n`);
+
+  choose('plain');
+  editor.tableBar.querySelector('[data-action="deleteTable"]').click();
+  assert.equal(changes.at(-1), 'After\n', 'the wrapper goes with its table');
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

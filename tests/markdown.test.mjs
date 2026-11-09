@@ -162,3 +162,11 @@ test('alignment shortcodes round-trip with editable Markdown inside', () => {
   // Inline form on one line stays a protected shortcode, verbatim.
   assert.equal(roundTrip('[center]Inline[/center]\n'), '[center]Inline[/center]\n');
 });
+
+test('per-table style wrappers round-trip around their table', () => {
+  for (const style of ['plain', 'normal']) {
+    const source = `[div class="ve-table-${style}"]\n\n| A | B |\n| --- | ---: |\n| 1 | **2** |\n\n[/div]\n\nAfter\n`;
+    assert.match(markdownToHtml(source), new RegExp(`data-ve-table-style="${style}"`));
+    assert.equal(roundTrip(source), source, style);
+  }
+});

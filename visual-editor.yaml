@@ -2,6 +2,7 @@ enabled: true
 site_default: true
 shortcode_previews: true
 page_background: true
+plain_tables: false
 theme: auto
 smart_typography: true
 frontend_alerts: false
