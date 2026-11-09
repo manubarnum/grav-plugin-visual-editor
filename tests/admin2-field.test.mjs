@@ -166,6 +166,22 @@ test('submitting a dialog does not bubble to the Admin2 page form', () => {
   pageForm.remove();
 });
 
+test('list buttons produce Markdown lists', async () => {
+  const { el, changes } = mount('One\n');
+  await el.editor.command('bulletList');
+  assert.equal(changes.at(-1), '- One\n');
+  await el.editor.command('orderedList');
+  assert.equal(changes.at(-1), '1. One\n');
+  el.remove();
+});
+
+test('editor styles restore list markers removed by Admin2 (Tailwind preflight)', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../assets/css/editor.css', import.meta.url), 'utf8');
+  assert.match(css, /\.ve-content \.ProseMirror ul\{list-style:disc/);
+  assert.match(css, /\.ve-content \.ProseMirror ol\{list-style:decimal/);
+});
+
 test('media listing keeps images only and maps Admin2 fields', async () => {
   const { el } = mount('x\n');
   const items = await el.services().listMedia();
