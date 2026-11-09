@@ -13,7 +13,8 @@ npm install
 npm test                                   # node --test tests/*.test.mjs (jsdom, no browser)
 node --test --test-name-pattern="tables" tests/markdown.test.mjs   # single test by name
 npm run build                              # esbuild → dist/visual-editor/ + .zip + SHA256SUMS, and refreshes admin-next/fields/visual-editor.js
-for f in visual-editor.php classes/*.php; do php -l "$f"; done   # only PHP check; no PHP tests exist
+php tests/php/run.php                      # PHP tests (no PHPUnit: Grav stubs in tests/php/stubs.php); also run by npm test
+for f in visual-editor.php classes/*.php; do php -l "$f"; done   # syntax check
 ```
 
 There is no linter. Real Admin2 behaviour can only be verified on a running Grav 2 site. Reference sources of Admin2 (`grav-admin-next`, `grav-plugin-admin2`), the API plugin and shortcode-core can be cloned into `.research/` (gitignored) to check contracts.
