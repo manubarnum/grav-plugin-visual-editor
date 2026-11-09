@@ -39,6 +39,19 @@ function pageMedia() {
     .map((item) => ({ name: item.filename, path: item.filename, url: item.url, thumb: item.thumb, alt: item.alt || '' }));
 }
 
+/**
+ * file name → display URL, built once per synchronous render: resolving every image of a page used to
+ * rebuild the whole media list per image. Dropped after the current task, so later uploads are seen.
+ */
+let mediaUrls = null;
+function pageMediaUrl(name) {
+  if (!mediaUrls) {
+    mediaUrls = new Map(pageMedia().map((item) => [item.name, item.url]));
+    queueMicrotask(() => { mediaUrls = null; });
+  }
+  return mediaUrls.get(name) || '';
+}
+
 function apiUrl(path) {
   const server = window.__GRAV_API_SERVER_URL || '';
   const prefix = window.__GRAV_API_PREFIX || '/api/v1';
@@ -181,7 +194,7 @@ export class VisualEditorField extends HTMLElement {
   resolveMedia(src) {
     const name = decodeURIComponent(String(src).split(/[?#]/)[0]);
     if (this.uploaded.has(name)) return this.uploaded.get(name);
-    return pageMedia().find((item) => item.name === name)?.url || '';
+    return pageMediaUrl(name);
   }
 
   refreshImages() {

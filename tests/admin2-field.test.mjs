@@ -472,6 +472,20 @@ test('the toolbar state is computed once per keystroke, with one lookup per bloc
   assert.equal(editor.toolbar.querySelector('[data-action="alignLeft"]').getAttribute('aria-pressed'), 'true');
 });
 
+test('page media is read once per render, not once per image', () => {
+  const original = window.__GRAV_PAGE_MEDIA;
+  let reads = 0;
+  window.__GRAV_PAGE_MEDIA = () => { reads += 1; return original(); };
+  try {
+    const { el } = mount(Array.from({ length: 20 }, (_, i) => `![p${i}](photo.jpg)\n`).join('\n'));
+    assert.equal(el.querySelectorAll('.ProseMirror img[src="https://grav.example/user/pages/blog/post/photo.jpg"]').length, 20);
+    assert.ok(reads <= 2, `media snapshot reads while mounting 20 images: ${reads}`);
+    reads = 0;
+    el.refreshImages();
+    assert.ok(reads <= 1, `reads per refresh: ${reads}`);
+  } finally { window.__GRAV_PAGE_MEDIA = original; }
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
