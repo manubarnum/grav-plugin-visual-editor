@@ -210,3 +210,9 @@ test('shortcodes, Twig and footnote syntax inside inline code stay literal', () 
   const source = 'Write `[notice]Hi[/notice]`, `{{ page.title }}` or `[^1]` as text.\n';
   assert.equal(roundTrip(source), source);
 });
+
+test('a link around inline code keeps its link', () => {
+  for (const source of ['[use `x`](https://x.test)\n', 'Run [`npm test`](https://docs.npmjs.com "npm") first.\n']) {
+    assert.equal(roundTrip(source), source);
+  }
+});

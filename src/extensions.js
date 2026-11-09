@@ -4,6 +4,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { CellSelection } from '@tiptap/pm/tables';
 import StarterKit from '@tiptap/starter-kit';
 import ListItem from '@tiptap/extension-list-item';
+import Code from '@tiptap/extension-code';
 import Link from '@tiptap/extension-link';
 import CodeBlock from '@tiptap/extension-code-block';
 import Image from '@tiptap/extension-image';
@@ -125,6 +126,14 @@ const ImageWithSource = Image.extend({
       };
     };
   },
+});
+
+/**
+ * Inline code still excludes every formatting mark (as TipTap's `excludes: '_'` did) but allows a link
+ * around it: otherwise `[use \`x\`](url)` lost its link on the code part when loaded.
+ */
+const CodeInLink = Code.extend({
+  excludes: 'bold italic strike highlight subscript superscript keyboard citation abbreviation',
 });
 
 /** Links remember a reference-style origin (`[text][label]`) so they are saved in the same form. */
@@ -413,7 +422,8 @@ const FlexibleListItem = ListItem.extend({ content: 'block+' });
 
 export function createExtensions(config) {
   return [
-    StarterKit.configure({ blockquote: false, codeBlock: false, link: false, listItem: false }),
+    StarterKit.configure({ blockquote: false, codeBlock: false, code: false, link: false, listItem: false }),
+    CodeInLink,
     FlexibleListItem,
     ReferenceLink.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: null } }),
     CodeBlock,

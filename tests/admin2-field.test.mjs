@@ -409,6 +409,17 @@ test('pending edits are reported at once on blur, Ctrl+S, grav:editor:save and r
   } finally { VisualEditorField.changeDelay = 0; }
 });
 
+test('inline code still refuses formatting marks (unchanged), while keeping a link', () => {
+  const { el, changes } = mount('Use `x` here and [`y`](https://x.test).\n');
+  const tiptap = el.editor.editor;
+  tiptap.commands.setTextSelection({ from: 5, to: 6 }); // the code "x"
+  tiptap.commands.toggleBold();
+  tiptap.commands.setTextSelection({ from: 1, to: 4 });
+  tiptap.commands.toggleItalic();
+  assert.equal(changes.at(-1), '*Use* `x` here and [`y`](https://x.test).\n');
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
