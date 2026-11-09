@@ -67,5 +67,5 @@ form:
             toolbar:
               type: textarea
               label: Toolbar buttons (comma-separated)
-              default: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,colorBlock,table,codeBlock,raw,shortcode,source'
-              description: 'Available: undo, redo, heading, bold, italic, strike, link, image, bulletList, orderedList, blockquote, alert, colorBlock, table, codeBlock, raw, shortcode, source.'
+              default: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,colorBlock,alignLeft,alignCenter,alignRight,table,codeBlock,raw,shortcode,source'
+              description: 'Available: undo, redo, heading, bold, italic, strike, link, image, bulletList, orderedList, blockquote, alert, colorBlock, alignLeft, alignCenter, alignRight, table, codeBlock, raw, shortcode, source.'

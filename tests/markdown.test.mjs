@@ -150,3 +150,15 @@ test('other [div] shortcodes stay protected verbatim', () => {
   assert.doesNotMatch(markdownToHtml(source), /data-ve-block/);
   assert.equal(roundTrip(source), source);
 });
+
+test('alignment shortcodes round-trip with editable Markdown inside', () => {
+  for (const align of ['center', 'right', 'left', 'justify']) {
+    const source = `[${align}]\n\n## Title\n\nSome **text**.\n\n![](photo.jpg)\n\n[/${align}]\n`;
+    const html = markdownToHtml(source);
+    assert.match(html, new RegExp(`data-ve-align="${align}"`));
+    assert.match(html, /<strong>text<\/strong>/);
+    assert.equal(roundTrip(source), source, align);
+  }
+  // Inline form on one line stays a protected shortcode, verbatim.
+  assert.equal(roundTrip('[center]Inline[/center]\n'), '[center]Inline[/center]\n');
+});

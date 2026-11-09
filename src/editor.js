@@ -1,22 +1,22 @@
 import { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { alertKinds, colorBlockTag, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
+import { alertKinds, alignments, colorBlockTag, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
 
 const icons = {
   undo: '↶', redo: '↷', heading: 'H', bold: 'B', italic: 'I', strike: 'S', link: '🔗', image: '▧',
-  bulletList: '•≡', orderedList: '1.≡', blockquote: '❝', alert: 'ⓘ', colorBlock: '▣', table: '⊞', codeBlock: '{ }',
+  bulletList: '•≡', orderedList: '1.≡', blockquote: '❝', alert: 'ⓘ', colorBlock: '▣', alignLeft: '⇤', alignCenter: '↔', alignRight: '⇥', table: '⊞', codeBlock: '{ }',
   raw: '</>', shortcode: '[ ]', source: '⌘', more: '⋯', highlight: '▰', subscript: 'x₂', superscript: 'x²',
   keyboard: '⌨', citation: 'C', abbreviation: 'ab', fullscreen: '⛶',
 };
 const labels = {
   undo: 'Undo', redo: 'Redo', heading: 'Heading and paragraph', bold: 'Bold', italic: 'Italic', strike: 'Strikethrough',
   link: 'Insert link', image: 'Insert image from page media', bulletList: 'Bulleted list', orderedList: 'Numbered list',
-  blockquote: 'Blockquote', alert: 'GitHub-style alert', colorBlock: 'Colored block (background color)', table: 'Insert or edit table', codeBlock: 'Code block',
+  blockquote: 'Blockquote', alert: 'GitHub-style alert', colorBlock: 'Colored block (background color)', alignLeft: 'Align left', alignCenter: 'Center', alignRight: 'Align right', table: 'Insert or edit table', codeBlock: 'Code block',
   raw: 'HTML or Twig block', shortcode: 'Insert shortcode', source: 'Markdown source', more: 'More formatting',
   highlight: 'Highlight', subscript: 'Subscript', superscript: 'Superscript', keyboard: 'Keyboard text', citation: 'Citation', abbreviation: 'Abbreviation',
 };
-const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
+const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'alignLeft', 'alignCenter', 'alignRight', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
 const messages = {
   visual: 'Visual', source: 'Source', saved: 'Markdown is synchronized with Grav’s page form.', copied: 'Source copied.',
 };
@@ -207,6 +207,9 @@ export class VisualEditor {
       case 'blockquote': return chain().toggleBlockquote().run();
       case 'alert': return this.alertDialog();
       case 'colorBlock': return this.colorBlockDialog();
+      case 'alignLeft': return this.setAlignment('left');
+      case 'alignCenter': return this.setAlignment('center');
+      case 'alignRight': return this.setAlignment('right');
       case 'table': return this.tableDialog();
       case 'codeBlock': return chain().toggleCodeBlock().run();
       case 'raw': return this.rawDialog();
@@ -263,14 +266,52 @@ export class VisualEditor {
     });
   }
 
-  /** The colored block around the cursor, if any. */
-  findColorBlock() {
+  /** The nearest block of `type` around the cursor, if any. */
+  findAncestor(type) {
     const { $from } = this.editor.state.selection;
     for (let depth = $from.depth; depth > 0; depth -= 1) {
       const node = $from.node(depth);
-      if (node.type.name === 'colorBlock') return { node, pos: $from.before(depth) };
+      if (node.type.name === type) return { node, pos: $from.before(depth) };
     }
     return null;
+  }
+
+  findColorBlock() { return this.findAncestor('colorBlock'); }
+
+  /**
+   * Wrap the selected blocks in a shortcode block. Shortcode tags must start their line, so the wrap
+   * happens at the document (or another shortcode block) level: a whole list or quote, never inside it.
+   */
+  wrapBlocks(type, attrs) {
+    const { state } = this.editor;
+    const { $from, $to } = state.selection;
+    const containers = ['doc', 'colorBlock', 'alignBlock'];
+    const range = $from.blockRange($to, (node) => containers.includes(node.type.name));
+    if (!range) return false;
+    this.editor.chain().focus().command(({ tr }) => { tr.wrap(range, [{ type: state.schema.nodes[type], attrs }]); return true; }).run();
+    return true;
+  }
+
+  unwrapBlock({ node, pos }) {
+    this.editor.chain().focus().command(({ tr }) => { tr.replaceWith(pos, pos + node.nodeSize, node.content); return true; }).run();
+  }
+
+  /** Left is the default alignment: choosing it removes the alignment block. Tables align the column instead. */
+  setAlignment(align) {
+    if (!alignments.includes(align)) return;
+    if (this.editor.isActive('table')) return this.tableCommand(`align${align[0].toUpperCase()}${align.slice(1)}`);
+    const current = this.findAncestor('alignBlock');
+    if (current) {
+      if (align === 'left') return this.unwrapBlock(current);
+      this.editor.chain().focus().command(({ tr }) => { tr.setNodeMarkup(current.pos, undefined, { align }); return true; }).run();
+      return;
+    }
+    if (align !== 'left' && !this.wrapBlocks('alignBlock', { align })) this.notify('This selection cannot be aligned.', true);
+  }
+
+  currentAlignment() {
+    if (this.editor.isActive('table')) return null;
+    return this.findAncestor('alignBlock')?.node.attrs.align || 'left';
   }
 
   colorBlockDialog() {
@@ -289,16 +330,14 @@ export class VisualEditor {
           tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, open: colorBlockTag(chosen, current.node.attrs.open), color: chosen });
           return true;
         }).run();
-      } else if (!this.editor.chain().focus().wrapIn('colorBlock', { open: colorBlockTag(chosen), color: chosen }).run()) {
+      } else if (!this.wrapBlocks('colorBlock', { open: colorBlockTag(chosen), color: chosen })) {
         this.notify('This selection cannot be placed in a colored block.', true);
       }
     }, current ? () => this.removeColorBlock(current) : null, 'Remove colored block');
   }
 
   /** Unwrap: the block's content stays in place, only the colored frame goes. */
-  removeColorBlock({ node, pos }) {
-    this.editor.chain().focus().command(({ tr }) => { tr.replaceWith(pos, pos + node.nodeSize, node.content); return true; }).run();
-  }
+  removeColorBlock(block) { this.unwrapBlock(block); }
 
   ensureAlertTitle(kind) {
     const { state } = this.editor;
@@ -601,6 +640,7 @@ export class VisualEditor {
       if (name === 'undo') button.disabled = !this.editor.can().undo();
       if (name === 'redo') button.disabled = !this.editor.can().redo();
       if (name === 'colorBlock') button.setAttribute('aria-pressed', String(Boolean(this.findColorBlock())));
+      if (name.startsWith('align')) button.setAttribute('aria-pressed', String(this.currentAlignment() === name.slice(5).toLowerCase()));
     });
     const inTable = this.editor.isActive('table'); this.tableBar.hidden = !inTable || this.mode === 'source';
     const image = this.mode === 'visual' ? this.selectedImage() : null;

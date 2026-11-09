@@ -278,6 +278,43 @@ test('the editing surface previews the page background color from the form', () 
   el.remove();
 });
 
+test('alignment buttons wrap, change and remove [center]/[right] blocks', () => {
+  const { el, changes } = mount('First\n\nSecond\n');
+  const editor = el.editor;
+  const pressed = (name) => editor.toolbar.querySelector(`[data-action="${name}"]`).getAttribute('aria-pressed');
+  editor.editor.commands.setTextSelection(2);
+  assert.equal(pressed('alignLeft'), 'true');
+
+  editor.command('alignCenter');
+  assert.equal(changes.at(-1), '[center]\n\nFirst\n\n[/center]\n\nSecond\n');
+  assert.equal(el.querySelector('.ProseMirror .ve-align-block').getAttribute('data-align'), 'center');
+  assert.equal(pressed('alignCenter'), 'true');
+
+  editor.command('alignRight');
+  assert.equal(changes.at(-1), '[right]\n\nFirst\n\n[/right]\n\nSecond\n');
+
+  editor.command('alignLeft');
+  assert.equal(changes.at(-1), 'First\n\nSecond\n');
+  el.remove();
+});
+
+test('aligning inside a list wraps the whole list (shortcode tags must start their line)', () => {
+  const { el, changes } = mount('- one\n- two\n');
+  el.editor.editor.commands.setTextSelection(3);
+  el.editor.command('alignCenter');
+  assert.equal(changes.at(-1), '[center]\n\n- one\n- two\n\n[/center]\n');
+  el.remove();
+});
+
+test('alignment buttons align the column inside a table', () => {
+  const { el, changes } = mount('| A | B |\n| --- | --- |\n| 1 | 2 |\n');
+  el.editor.editor.commands.setTextSelection(4);
+  el.editor.command('alignRight');
+  assert.match(changes.at(-1), /^\| A \| B \|\n\| ---: \| --- \|/);
+  assert.doesNotMatch(changes.at(-1), /\[right\]/);
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

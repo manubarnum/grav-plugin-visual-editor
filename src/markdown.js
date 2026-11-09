@@ -74,6 +74,17 @@ export function protectBlocks(markdown) {
       out.push(protectedBlock(block.join('\n'), kind));
       continue;
     }
+    // Block alignment shortcodes (shortcode-core) on their own lines: keep their content editable.
+    const align = line.match(alignBlockOpen);
+    if (align) {
+      const end = extractShortcode(lines, i);
+      if (end > i && lines[end].trim() === `[/${align[1]}]`) {
+        const inner = protectBlocks(lines.slice(i + 1, end).join('\n')).trim();
+        out.push(`<div data-ve-align="${align[1]}">\n\n${inner}\n\n</div>\n`);
+        i = end + 1;
+        continue;
+      }
+    }
     // `[div class="ve-block" …]` is the editor's own colored block: keep its content editable.
     if (colorBlockOpen.test(line)) {
       const end = extractShortcode(lines, i);
@@ -178,6 +189,10 @@ export function nodeToMarkdown(node, depth = 0) {
     case 'text': return node.text || '';
     case 'hardBreak': return '\\\n';
     case 'protectedBlock': return node.attrs.source;
+    case 'alignBlock': {
+      const body = blocks();
+      return `[${node.attrs.align}]\n\n${body ? body + '\n\n' : ''}[/${node.attrs.align}]`;
+    }
     case 'colorBlock': {
       const body = blocks();
       return `${node.attrs.open}\n\n${body ? body + '\n\n' : ''}[/div]`;
@@ -291,6 +306,10 @@ export function withImageWidth(src, width) {
  * Colored blocks are shortcode-core `[div]` shortcodes marked with the `ve-block` class, so Grav renders
  * them without raw HTML: `[div class="ve-block" style="background-color:#fde2e4;color:#1f2329;…"]`.
  */
+/** shortcode-core's block alignment shortcodes: `[center]` … `[/center]`, each tag on its own line. */
+export const alignments = ['left', 'center', 'right', 'justify'];
+const alignBlockOpen = /^\s*\[(left|center|right|justify)\]\s*$/;
+
 const colorBlockOpen = /^\s*\[div\b(?=[^\]]*\bve-block\b)[^\]]*\]\s*$/;
 const hexColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
