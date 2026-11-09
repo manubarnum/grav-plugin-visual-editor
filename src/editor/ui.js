@@ -18,7 +18,7 @@ export const shortcodeContainers = ['doc', 'colorBlock', 'alignBlock'];
 
 export const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'alignLeft', 'alignCenter', 'alignRight', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
 export const messages = {
-  visual: 'Visual', source: 'Source', saved: 'Markdown is synchronized with Grav’s page form.', copied: 'Source copied.',
+  visual: 'Visual', source: 'Source', saved: 'Edits are kept as Markdown and saved with the page.', copied: 'Source copied.',
 };
 
 /** A lone Markdown image or link in transferred text (always accepted when it comes from Grav's media panel). */

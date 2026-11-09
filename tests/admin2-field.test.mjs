@@ -523,6 +523,11 @@ test('distraction-free editing lifts the editor above the admin page, then puts 
   outside.remove();
 });
 
+test('the footer describes how edits are saved in Admin2', () => {
+  const { el } = mount('Text\n');
+  assert.equal(el.querySelector('.ve-footer span').textContent, 'Edits are kept as Markdown and saved with the page.');
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
