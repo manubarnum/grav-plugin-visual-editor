@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
@@ -35,9 +35,21 @@ const tag = window.__GRAV_FIELD_TAG;
 VisualEditorField.changeDelay = 0;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Isolation: a test that fails before its own cleanup must not leave an editor (and its window
+// listeners), a replaced fetch or a changed delay behind for the next tests.
+const mounted = new Set();
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  mounted.forEach((el) => el.remove());
+  mounted.clear();
+  globalThis.fetch = originalFetch;
+  VisualEditorField.changeDelay = 0;
+});
+
 /** Mount the element the way CustomFieldWrapper.svelte does and record its change events. */
 function mount(value, field = { name: 'content', type: 'visual-editor', visual_editor: { smartTypography: false } }) {
   const el = document.createElement(tag);
+  mounted.add(el);
   const changes = [];
   el.field = field;
   el.value = value;
@@ -159,6 +171,7 @@ test('submitting a dialog does not bubble to the Admin2 page form', () => {
   pageForm.addEventListener('submit', (event) => { pageSubmits += 1; event.preventDefault(); });
   document.body.append(pageForm);
   const el = document.createElement(tag);
+  mounted.add(el);
   el.field = { name: 'content', visual_editor: {} };
   el.value = 'Text\n';
   pageForm.append(el);
@@ -264,6 +277,7 @@ test('colored block: wrap the selection, change its color, remove it', () => {
 test('the editing surface previews the page background color from the form', () => {
   const form = { 'header.background_color': '#1d3557' };
   const el = document.createElement(tag);
+  mounted.add(el);
   el.field = { name: 'content', visual_editor: {} };
   el.getValue = (path) => form[path];
   el.value = 'Text\n';
