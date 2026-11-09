@@ -73,7 +73,7 @@ export class VisualEditor {
         transformPastedHTML: (html) => html,
       },
       onUpdate: () => this.sync(),
-      onSelectionUpdate: () => this.updateToolbar(),
+      // Fires for content and selection changes alike (a separate onSelectionUpdate doubled the work).
       onTransaction: () => this.updateToolbar(),
       onCreate: () => { this.content.querySelector('.ProseMirror')._veView = this.editor.view; },
     });
@@ -116,6 +116,7 @@ export class VisualEditor {
   }
 
   destroy() {
+    if (this.toolbarFrame) cancelAnimationFrame(this.toolbarFrame);
     this.closeDialog();
     document.removeEventListener('keydown', this.onKeydown);
     this.editor?.destroy();
@@ -682,16 +683,27 @@ export class VisualEditor {
 
   updateCount() { this.count.textContent = `${this.markdown.length.toLocaleString()} characters · Markdown`; }
 
+  /** Refresh button states at most once per animation frame, whatever the number of transactions. */
   updateToolbar() {
-    if (!this.editor) return;
+    if (!this.editor || this.toolbarFrame) return;
+    this.toolbarFrame = requestAnimationFrame(() => {
+      this.toolbarFrame = null;
+      if (!this.editor.isDestroyed) this.renderToolbarState();
+    });
+  }
+
+  renderToolbarState() {
+    // Block lookups walk up the document: once per refresh, not once per button.
+    const colorBlock = Boolean(this.findColorBlock());
+    const alignment = this.currentAlignment();
     this.toolbar.querySelectorAll('[data-action]').forEach((button) => {
       const name = button.dataset.action;
       const active = { bold: 'bold', italic: 'italic', strike: 'strike', link: 'link', bulletList: 'bulletList', orderedList: 'orderedList', blockquote: 'blockquote', codeBlock: 'codeBlock', highlight: 'highlight', subscript: 'subscript', superscript: 'superscript', keyboard: 'keyboard', citation: 'citation' }[name];
       if (active) button.setAttribute('aria-pressed', String(this.editor.isActive(active)));
       if (name === 'undo') button.disabled = !this.editor.can().undo();
       if (name === 'redo') button.disabled = !this.editor.can().redo();
-      if (name === 'colorBlock') button.setAttribute('aria-pressed', String(Boolean(this.findColorBlock())));
-      if (name.startsWith('align')) button.setAttribute('aria-pressed', String(this.currentAlignment() === name.slice(5).toLowerCase()));
+      if (name === 'colorBlock') button.setAttribute('aria-pressed', String(colorBlock));
+      if (name.startsWith('align')) button.setAttribute('aria-pressed', String(alignment === name.slice(5).toLowerCase()));
     });
     const inTable = this.editor.isActive('table'); this.tableBar.hidden = !inTable || this.mode === 'source';
     const image = this.mode === 'visual' ? this.selectedImage() : null;

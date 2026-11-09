@@ -455,6 +455,23 @@ test('link dialog with the cursor inside a link edits that link instead of inser
   el.remove();
 });
 
+test('the toolbar state is computed once per keystroke, with one lookup per block kind', () => {
+  const { el } = mount('Hello\n');
+  const editor = el.editor;
+  const tiptap = editor.editor;
+  tiptap.commands.setTextSelection(3);
+  let refreshes = 0;
+  let lookups = 0;
+  const querySelectorAll = editor.toolbar.querySelectorAll.bind(editor.toolbar);
+  editor.toolbar.querySelectorAll = (selector) => { refreshes += 1; return querySelectorAll(selector); };
+  const findAncestor = editor.findAncestor.bind(editor);
+  editor.findAncestor = (type) => { lookups += 1; return findAncestor(type); };
+  tiptap.commands.insertContent('x');
+  assert.equal(refreshes, 1, 'one toolbar refresh per keystroke');
+  assert.ok(lookups <= 2, `ancestor lookups per refresh: ${lookups}`);
+  assert.equal(editor.toolbar.querySelector('[data-action="alignLeft"]').getAttribute('aria-pressed'), 'true');
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
