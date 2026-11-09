@@ -51,7 +51,7 @@ for (const folder of await readdir(join(root, 'node_modules', '@tiptap'))) {
     try { const license = await readFile(join(root, 'node_modules', '@tiptap', folder, name), 'utf8'); notices.push(`\n## @tiptap/${folder}\n${license}`); break; } catch {}
   }
 }
-for (const name of ['marked', 'turndown', 'turndown-plugin-gfm']) {
+for (const name of ['marked']) {
   for (const file of ['LICENSE', 'LICENSE.md', 'LICENSE.txt']) {
     try { notices.push(`\n## ${name}\n${await readFile(join(root, 'node_modules', name, file), 'utf8')}`); break; } catch {}
   }

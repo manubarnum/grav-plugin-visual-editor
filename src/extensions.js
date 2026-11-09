@@ -17,8 +17,6 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { marked } from 'marked';
-import TurndownService from 'turndown';
-import { gfm } from 'turndown-plugin-gfm';
 import { alertKinds, addMediaAttributes, colorFromOpen, referenceDefinitions, resolveReferences, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -413,14 +411,6 @@ export function markdownToHtml(markdown, pageMediaUrl = '') {
   const parsed = markdownTables(protectedMarkdown, (cell) => marked.parseInline(protectInline(cell)));
   const parsedWithInline = protectInline(parsed);
   return addMediaAttributes(githubAlerts(marked.parse(parsedWithInline)), pageMediaUrl);
-}
-
-/** Used for unrecognized inline HTML: serializes to its source instead of dropping it. */
-export function fallbackTurndown(html) {
-  const service = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-', emDelimiter: '*', br: '\\' });
-  service.use(gfm);
-  service.keep(['abbr', 'cite', 'kbd', 'mark', 'sup', 'sub']);
-  return service.turndown(html);
 }
 
 /** Column alignment from Markdown divider rows (`:---:`), serialized back by nodeToMarkdown. */

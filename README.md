@@ -61,4 +61,4 @@ The build produces `dist/visual-editor/` and `dist/visual-editor.zip` with a SHA
 
 ## License
 
-MIT. TipTap, marked, Turndown and their dependencies retain their respective open-source licenses, included in the distribution's THIRD-PARTY-NOTICES file.
+MIT. TipTap, ProseMirror, marked and their dependencies retain their respective open-source licenses, included in the distribution's THIRD-PARTY-NOTICES file.
