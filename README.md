@@ -6,13 +6,17 @@ An independent, open-source visual Markdown editor for **Grav 2 and Admin2**. It
 
 - Edits page content visually with TipTap/ProseMirror and keeps Markdown as the saved format.
 - Preserves standalone HTML, Twig and shortcode blocks verbatim, including nested shortcodes.
+- Keeps the page's own Markdown conventions when saving (`*` or `-` bullets, `_em_`, setext headings, `1)`, `***`, two-space line breaks, `<autolinks>`, tables without outer pipes), reference-style links and their definitions, footnotes, and images inside sentences.
 - Provides headings, inline formatting, links, images, lists, blockquotes and fenced code blocks.
-- Includes visual Markdown tables with row/column insertion, removal, alignment and cell merging.
+- Includes visual Markdown tables with row/column insertion, removal, alignment and cell merging; any table can be shown without background or borders.
+- Aligns blocks left, center or right (shortcode-core's `[center]`/`[right]`), and wraps blocks in a colored frame (`[div class="ve-block" style="…"]`) with readable text on any background.
+- Resizes images by dragging or with 320/640/960 px presets: Grav serves a resized copy (`photo.jpg?cropResize=640`).
 - Inserts and previews GitHub-style `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION` alerts.
 - Uses Admin2's page media: pick, upload, paste or drop images; the media panel's insert button inserts at the cursor.
 - Has visual/source modes, undo/redo, a draggable block handle, follows Admin2's light/dark mode, and optional smart typography.
 - Supports abbreviation, citation, highlight, keyboard, superscript and subscript inline HTML.
 - Renders shortcode previews on demand through `shortcode-core`.
+- Adds a per-page background color (field under the editor), applied to the whole page on the site with readable text.
 
 ## Requirements
 
@@ -40,7 +44,20 @@ No `npm install`, Composer install, front-end build, external CDN or web service
 
 ## Configuration
 
-Plugin options: enable/disable, site default editor, automatic/light/dark appearance, smart typography, shortcode previews, a comma-separated toolbar, and optional GitHub alert styles on public pages (leave off when the *Github Markdown Alerts* plugin is installed). Raw HTML and Twig are preserved as source, not sanitized: only users who may already edit such content should have page access.
+Plugin options (Admin2 → Plugins → Grav Visual Editor):
+
+| Option | Default | Effect |
+|---|---|---|
+| `site_default` | on | The visual editor is the content editor for everyone who has not picked another one. |
+| `shortcode_previews` | on | Shortcode blocks can be previewed through shortcode-core. |
+| `page_background` | on | Adds the *Page background color* field under the editor. |
+| `plain_tables` | off | Every table on the site without background or borders (a single table can still be set otherwise from the editor). |
+| `theme` | auto | Editor appearance: follow Admin2, light or dark. |
+| `smart_typography` | on | Typographic quotes and dashes while typing. |
+| `toolbar` | all buttons | Comma-separated list of toolbar buttons. |
+| `frontend_alerts` | off | GitHub alert styles on public pages (leave off with the *Github Markdown Alerts* plugin). |
+
+Raw HTML and Twig are preserved as source, not sanitized: only users who may already edit such content should have page access.
 
 Shortcode presets for the *Insert shortcode* dialog can be listed under `shortcodes` in `user/config/plugins/visual-editor.yaml`:
 
@@ -57,7 +74,7 @@ npm test
 npm run build
 ```
 
-The build produces `dist/visual-editor/` and `dist/visual-editor.zip` with a SHA-256 manifest, and refreshes the committed `admin-next/fields/visual-editor.js`. Tests cover Markdown round trips and the Admin2 field contract (mounting, change events, value echo, media, preview) in jsdom; the real Admin2 integration needs a running Grav 2 site.
+The build produces `dist/visual-editor/` and `dist/visual-editor.zip` with a SHA-256 manifest, and refreshes the committed `admin-next/fields/visual-editor.js` and `THIRD-PARTY-NOTICES.md`. `npm test` runs the Markdown round trips and the Admin2 field contract (mounting, batched change events, value echo, media, preview) in jsdom, configuration consistency checks, and the PHP tests (`php tests/php/run.php`, no PHPUnit needed; skipped without PHP). The real Admin2 integration needs a running Grav 2 site.
 
 ## License
 

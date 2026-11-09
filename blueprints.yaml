@@ -1,7 +1,7 @@
 name: Grav Visual Editor
 slug: visual-editor
 type: plugin
-version: 2.0.0
+version: 2.1.0
 description: A Markdown-preserving visual editor for Grav Admin2 with tables, alerts, media and shortcode support.
 icon: edit
 author:
