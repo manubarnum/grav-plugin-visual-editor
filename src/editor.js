@@ -1,22 +1,22 @@
 import { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { alertKinds, escapeHtml, imageWidth, withImageWidth } from './markdown.js';
+import { alertKinds, colorBlockTag, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
 
 const icons = {
   undo: '↶', redo: '↷', heading: 'H', bold: 'B', italic: 'I', strike: 'S', link: '🔗', image: '▧',
-  bulletList: '•≡', orderedList: '1.≡', blockquote: '❝', alert: 'ⓘ', table: '⊞', codeBlock: '{ }',
+  bulletList: '•≡', orderedList: '1.≡', blockquote: '❝', alert: 'ⓘ', colorBlock: '▣', table: '⊞', codeBlock: '{ }',
   raw: '</>', shortcode: '[ ]', source: '⌘', more: '⋯', highlight: '▰', subscript: 'x₂', superscript: 'x²',
   keyboard: '⌨', citation: 'C', abbreviation: 'ab', fullscreen: '⛶',
 };
 const labels = {
   undo: 'Undo', redo: 'Redo', heading: 'Heading and paragraph', bold: 'Bold', italic: 'Italic', strike: 'Strikethrough',
   link: 'Insert link', image: 'Insert image from page media', bulletList: 'Bulleted list', orderedList: 'Numbered list',
-  blockquote: 'Blockquote', alert: 'GitHub-style alert', table: 'Insert or edit table', codeBlock: 'Code block',
+  blockquote: 'Blockquote', alert: 'GitHub-style alert', colorBlock: 'Colored block (background color)', table: 'Insert or edit table', codeBlock: 'Code block',
   raw: 'HTML or Twig block', shortcode: 'Insert shortcode', source: 'Markdown source', more: 'More formatting',
   highlight: 'Highlight', subscript: 'Subscript', superscript: 'Superscript', keyboard: 'Keyboard text', citation: 'Citation', abbreviation: 'Abbreviation',
 };
-const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
+const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
 const messages = {
   visual: 'Visual', source: 'Source', saved: 'Markdown is synchronized with Grav’s page form.', copied: 'Source copied.',
 };
@@ -206,6 +206,7 @@ export class VisualEditor {
       case 'orderedList': return chain().toggleOrderedList().run();
       case 'blockquote': return chain().toggleBlockquote().run();
       case 'alert': return this.alertDialog();
+      case 'colorBlock': return this.colorBlockDialog();
       case 'table': return this.tableDialog();
       case 'codeBlock': return chain().toggleCodeBlock().run();
       case 'raw': return this.rawDialog();
@@ -260,6 +261,43 @@ export class VisualEditor {
       if (text) chain.insertContent(text).run();
       this.ensureAlertTitle(kind);
     });
+  }
+
+  /** The colored block around the cursor, if any. */
+  findColorBlock() {
+    const { $from } = this.editor.state.selection;
+    for (let depth = $from.depth; depth > 0; depth -= 1) {
+      const node = $from.node(depth);
+      if (node.type.name === 'colorBlock') return { node, pos: $from.before(depth) };
+    }
+    return null;
+  }
+
+  colorBlockDialog() {
+    const current = this.findColorBlock();
+    const presets = [['#fde2e4', 'Rose'], ['#fff1c1', 'Yellow'], ['#e3f4e1', 'Green'], ['#ddeefc', 'Blue'], ['#ece4fb', 'Lavender'], ['#f1f1ef', 'Grey']];
+    const color = current ? (colorFromOpen(current.node.attrs.open) || current.node.attrs.color) : presets[0][0];
+    const isPreset = presets.some(([value]) => value === color.toLowerCase());
+    this.dialog(current ? 'Block background color' : 'Colored block', [
+      { name: 'preset', label: 'Background color', type: 'select', options: [...presets, ['custom', 'Custom color (below)']], value: isPreset ? color.toLowerCase() : 'custom' },
+      { name: 'custom', label: 'Custom color', type: 'color', value: isHexColor(color) ? color : '#fde2e4' },
+    ], ({ preset, custom }) => {
+      const chosen = preset === 'custom' ? custom : preset;
+      if (!isHexColor(chosen)) return this.notify('Choose a valid color.', true);
+      if (current) {
+        this.editor.chain().focus().command(({ tr }) => {
+          tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, open: colorBlockTag(chosen, current.node.attrs.open), color: chosen });
+          return true;
+        }).run();
+      } else if (!this.editor.chain().focus().wrapIn('colorBlock', { open: colorBlockTag(chosen), color: chosen }).run()) {
+        this.notify('This selection cannot be placed in a colored block.', true);
+      }
+    }, current ? () => this.removeColorBlock(current) : null, 'Remove colored block');
+  }
+
+  /** Unwrap: the block's content stays in place, only the colored frame goes. */
+  removeColorBlock({ node, pos }) {
+    this.editor.chain().focus().command(({ tr }) => { tr.replaceWith(pos, pos + node.nodeSize, node.content); return true; }).run();
   }
 
   ensureAlertTitle(kind) {
@@ -369,7 +407,7 @@ export class VisualEditor {
     ], ({ format }) => this.command(format));
   }
 
-  dialog(title, fields, onSubmit, onRemove = null) {
+  dialog(title, fields, onSubmit, onRemove = null, removeLabel = 'Remove link') {
     this.closeDialog();
     const overlay = element('div', 've-dialog-overlay');
     const dialog = element('section', 've-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', title);
@@ -390,7 +428,7 @@ export class VisualEditor {
       label.append(input); form.append(label);
     });
     const actions = element('div', 've-dialog-actions');
-    if (onRemove) { const remove = this.button('remove', 'Remove link', () => { onRemove(); this.closeDialog(); }); remove.classList.add('ve-danger'); actions.append(remove); }
+    if (onRemove) { const remove = this.button('remove', removeLabel, () => { this.closeDialog(); onRemove(); }); remove.classList.add('ve-danger'); actions.append(remove); }
     const cancel = this.button('cancel', 'Cancel', () => this.closeDialog());
     // button() cancels the click's default action, which would also cancel a native submit:
     // submit explicitly so required fields are still validated.
@@ -562,6 +600,7 @@ export class VisualEditor {
       if (active) button.setAttribute('aria-pressed', String(this.editor.isActive(active)));
       if (name === 'undo') button.disabled = !this.editor.can().undo();
       if (name === 'redo') button.disabled = !this.editor.can().redo();
+      if (name === 'colorBlock') button.setAttribute('aria-pressed', String(Boolean(this.findColorBlock())));
     });
     const inTable = this.editor.isActive('table'); this.tableBar.hidden = !inTable || this.mode === 'source';
     const image = this.mode === 'visual' ? this.selectedImage() : null;

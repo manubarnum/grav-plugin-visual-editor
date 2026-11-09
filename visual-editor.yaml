@@ -4,5 +4,5 @@ shortcode_previews: true
 theme: auto
 smart_typography: true
 frontend_alerts: false
-toolbar: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,table,codeBlock,raw,shortcode,source'
+toolbar: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,colorBlock,table,codeBlock,raw,shortcode,source'
 shortcodes: []

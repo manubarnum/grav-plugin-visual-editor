@@ -74,6 +74,16 @@ export function protectBlocks(markdown) {
       out.push(protectedBlock(block.join('\n'), kind));
       continue;
     }
+    // `[div class="ve-block" …]` is the editor's own colored block: keep its content editable.
+    if (colorBlockOpen.test(line)) {
+      const end = extractShortcode(lines, i);
+      if (end > i && lines[end].trim() === '[/div]') {
+        const inner = protectBlocks(lines.slice(i + 1, end).join('\n')).trim();
+        out.push(`<div data-ve-block="1" data-open="${encodeSource(line.trim())}">\n\n${inner}\n\n</div>\n`);
+        i = end + 1;
+        continue;
+      }
+    }
     if (/^\s*\[[a-zA-Z][\w:-]*(?:\s+[^\]]*)?\]/.test(line)) {
       const end = extractShortcode(lines, i);
       if (end >= i) {
@@ -168,6 +178,10 @@ export function nodeToMarkdown(node, depth = 0) {
     case 'text': return node.text || '';
     case 'hardBreak': return '\\\n';
     case 'protectedBlock': return node.attrs.source;
+    case 'colorBlock': {
+      const body = blocks();
+      return `${node.attrs.open}\n\n${body ? body + '\n\n' : ''}[/div]`;
+    }
     case 'image': return `![${String(node.attrs.alt || '').replace(/([\[\]\\])/g, '\\$1')}](${node.attrs.src || ''}${node.attrs.title ? ` "${String(node.attrs.title).replace(/"/g, '\\"')}"` : ''})`;
     case 'codeBlock': {
       const language = node.attrs.language || '';
@@ -271,4 +285,46 @@ export function withImageWidth(src, width) {
   const size = Math.round(Number(width) || 0);
   if (size > 0) kept.push(`cropResize=${size}`);
   return path + (kept.length ? '?' + kept.join('&') : '') + hash;
+}
+
+/**
+ * Colored blocks are shortcode-core `[div]` shortcodes marked with the `ve-block` class, so Grav renders
+ * them without raw HTML: `[div class="ve-block" style="background-color:#fde2e4;color:#1f2329;…"]`.
+ */
+const colorBlockOpen = /^\s*\[div\b(?=[^\]]*\bve-block\b)[^\]]*\]\s*$/;
+const hexColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+export function isHexColor(value) { return hexColor.test(String(value ?? '').trim()); }
+
+/** The background color written in a colored block's opening tag. */
+export function colorFromOpen(open) {
+  const match = String(open ?? '').match(/background(?:-color)?\s*:\s*([^;"\]]+)/i);
+  return match ? match[1].trim() : '';
+}
+
+/** Dark or white text, whichever reads better on the background (WCAG relative luminance). */
+export function contrastText(color) {
+  if (!isHexColor(color)) return '#1f2329';
+  let hex = color.trim().slice(1);
+  if (hex.length === 3) hex = hex.replace(/./g, '$&$&');
+  const [r, g, b] = [0, 2, 4].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.36 ? '#1f2329' : '#ffffff';
+}
+
+/** Opening tag for a colored block; with an existing tag, only its background and text colors change. */
+export function colorBlockTag(color, open = '') {
+  const background = isHexColor(color) ? color.trim().toLowerCase() : '#fde2e4';
+  const text = contrastText(background);
+  if (!open) {
+    return `[div class="ve-block" style="background-color:${background};color:${text};padding:1em 1.25em;border-radius:8px;margin:1em 0"]`;
+  }
+  let tag = open.replace(/(background(?:-color)?\s*:\s*)[^;"\]]+/i, `$1${background}`);
+  tag = /([;"\s])color\s*:/i.test(tag)
+    ? tag.replace(/([;"\s])(color\s*:\s*)[^;"\]]+/i, `$1$2${text}`)
+    : tag.replace(/(background(?:-color)?\s*:\s*[^;"\]]+)/i, `$1;color:${text}`);
+  return tag;
 }

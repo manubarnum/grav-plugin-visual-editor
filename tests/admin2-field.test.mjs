@@ -231,6 +231,33 @@ test('resizing an image: presets, original size, custom width, details and the d
   el.remove();
 });
 
+test('colored block: wrap the selection, change its color, remove it', () => {
+  const { el, changes } = mount('First paragraph\n\nSecond\n');
+  const editor = el.editor;
+  const submit = () => editor.dialogElement.querySelector('button[type="submit"]').click();
+  editor.editor.commands.setTextSelection(3);
+
+  editor.command('colorBlock');
+  assert.equal(editor.dialogElement.querySelector('select[name="preset"]').value, '#fde2e4');
+  submit();
+  assert.match(changes.at(-1), /^\[div class="ve-block" style="background-color:#fde2e4;color:#1f2329;[^"]*"\]\n\nFirst paragraph\n\n\[\/div\]\n\nSecond\n$/);
+  const block = el.querySelector('.ProseMirror .ve-color-block');
+  assert.ok(block, 'rendered as a colored block');
+  assert.match(block.getAttribute('style'), /background-color:\s*(?:#fde2e4|rgb\(253, 226, 228\))/);
+  assert.equal(editor.toolbar.querySelector('[data-action="colorBlock"]').getAttribute('aria-pressed'), 'true');
+
+  editor.command('colorBlock');
+  editor.dialogElement.querySelector('select[name="preset"]').value = 'custom';
+  editor.dialogElement.querySelector('input[name="custom"]').value = '#1d3557';
+  submit();
+  assert.match(changes.at(-1), /background-color:#1d3557;color:#ffffff;/, 'dark background gets white text');
+
+  editor.command('colorBlock');
+  editor.dialogElement.querySelector('[data-action="remove"]').click();
+  assert.equal(changes.at(-1), 'First paragraph\n\nSecond\n');
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

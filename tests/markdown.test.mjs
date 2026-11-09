@@ -135,3 +135,18 @@ test('resized images round-trip unchanged', () => {
     assert.equal(roundTrip(source), source);
   }
 });
+
+test('colored blocks round-trip with editable Markdown inside', () => {
+  const open = '[div class="ve-block" style="background-color:#fde2e4;color:#1f2329;padding:1em 1.25em;border-radius:8px;margin:1em 0"]';
+  const source = `${open}\n\n## Inside\n\nSome **bold** text.\n\n- one\n- two\n\n[notice]Nested[/notice]\n\n\`\`\`js\na();\n\`\`\`\n\n[/div]\n\nAfter\n`;
+  const html = markdownToHtml(source);
+  assert.match(html, /data-ve-block/);
+  assert.match(html, /<strong>bold<\/strong>/, 'content is parsed as Markdown, not protected');
+  assert.equal(roundTrip(source), source);
+});
+
+test('other [div] shortcodes stay protected verbatim', () => {
+  const source = '[div class="table table-striped"]\n| a | b |\n[/div]\n';
+  assert.doesNotMatch(markdownToHtml(source), /data-ve-block/);
+  assert.equal(roundTrip(source), source);
+});

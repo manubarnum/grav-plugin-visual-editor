@@ -18,7 +18,7 @@ import TableCell from '@tiptap/extension-table-cell';
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
-import { alertKinds, addMediaAttributes, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
+import { alertKinds, addMediaAttributes, colorFromOpen, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -168,6 +168,30 @@ const BlockquoteWithAlert = Node.create({
       unsetBlockquote: () => ({ commands }) => commands.lift(this.name),
       setAlert: (kind) => ({ commands }) => commands.updateAttributes(this.name, { alert: kind }),
     };
+  },
+});
+
+/** Editable colored block, saved as a shortcode-core `[div class="ve-block" style="…"]` (see markdown.js). */
+const ColorBlock = Node.create({
+  name: 'colorBlock', group: 'block', content: 'block+', defining: true,
+  addAttributes() {
+    return {
+      open: { default: '' },
+      color: { default: '#fde2e4' },
+    };
+  },
+  parseHTML() {
+    return [{
+      tag: 'div[data-ve-block]',
+      getAttrs: (element) => {
+        const open = element.getAttribute('data-open') || '';
+        return { open, color: colorFromOpen(open) || '#fde2e4' };
+      },
+    }];
+  },
+  renderHTML({ node }) {
+    const color = node.attrs.color;
+    return ['div', { class: 've-color-block', 'data-ve-block': '1', style: `background-color:${color};color:${contrastText(color)}` }, 0];
   },
 });
 
@@ -343,7 +367,7 @@ export function createExtensions(config) {
     ImageWithSource.configure({ inline: false, allowBase64: false, resolve: config.resolveMediaUrl || config.pageMediaUrl || null }),
     Highlight.configure({ multicolor: false }),
     Subscript, Superscript, Keyboard, Citation, Abbreviation,
-    BlockquoteWithAlert, AlertTitle, ProtectedBlock.configure(config.hooks || {}), InlineRaw,
+    BlockquoteWithAlert, AlertTitle, ColorBlock, ProtectedBlock.configure(config.hooks || {}), InlineRaw,
     Table.configure({ resizable: true, lastColumnResizable: true, cellMinWidth: 64 }), TableRow, AlignedTableHeader, AlignedTableCell,
     ...(config.smartTypography ? [Typography] : []),
     BlockDrag,
