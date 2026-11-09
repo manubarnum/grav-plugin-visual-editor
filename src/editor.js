@@ -239,12 +239,14 @@ export class VisualEditor {
 
   link() {
     const attributes = this.editor.getAttributes('link');
-    this.dialog(this.editor.isActive('link') ? 'Edit link' : 'Insert link', [
+    const editing = this.editor.isActive('link');
+    this.dialog(editing ? 'Edit link' : 'Insert link', [
       { name: 'href', label: 'URL', type: 'url', required: true, value: attributes.href || '' },
       { name: 'title', label: 'Title (optional)', value: attributes.title || '' },
     ], ({ href, title }) => {
       if (!href) return;
-      if (this.editor.state.selection.empty) this.editor.chain().focus().insertContent(`<a href="${escapeHtml(href)}">${escapeHtml(title || href)}</a>`).run();
+      // Insert new link text only for a bare cursor outside any link; inside a link, edit that link.
+      if (this.editor.state.selection.empty && !editing) this.editor.chain().focus().insertContent(`<a href="${escapeHtml(href)}">${escapeHtml(title || href)}</a>`).run();
       // A new URL no longer matches the page's reference definition: save it as a plain link.
       const unchanged = attributes.reference && href === attributes.href && (title || null) === (attributes.title || null);
       this.editor.chain().focus().extendMarkRange('link').setLink({ href, title: title || null, ...(unchanged ? {} : { reference: null, referenceForm: null }) }).run();

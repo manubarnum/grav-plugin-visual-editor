@@ -420,6 +420,27 @@ test('inline code still refuses formatting marks (unchanged), while keeping a li
   el.remove();
 });
 
+test('link dialog with the cursor inside a link edits that link instead of inserting its URL', () => {
+  const { el, changes } = mount('See [Grav](https://getgrav.org) now.\n');
+  const editor = el.editor;
+  const apply = (href) => {
+    editor.link();
+    if (href !== undefined) editor.dialogElement.querySelector('input[name="href"]').value = href;
+    editor.dialogElement.querySelector('button[type="submit"]').click();
+  };
+  editor.editor.commands.setTextSelection(7); // inside "Grav", no selection
+  apply();
+  assert.deepEqual(changes, [], 'same URL: nothing inserted, nothing changed');
+  editor.editor.commands.setTextSelection(7);
+  apply('https://example.org');
+  assert.equal(changes.at(-1), 'See [Grav](https://example.org) now.\n');
+
+  editor.editor.commands.setTextSelection(editor.editor.state.doc.content.size - 1); // after "now.", outside the link
+  apply('https://new.test');
+  assert.equal(changes.at(-1), 'See [Grav](https://example.org) now.[https://new.test](https://new.test)\n', 'outside a link: inserts a new link as before');
+  el.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
