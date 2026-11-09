@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { documentToMarkdown, markdownToHtml } from '../src/extensions.js';
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions } from '../src/extensions.js';
-import { normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth } from '../src/markdown.js';
+import { normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth, detectMarkdownStyle } from '../src/markdown.js';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://example.test/admin/pages/home' });
 global.window = dom.window;
@@ -24,7 +24,8 @@ const extensions = createExtensions(config);
 const schema = getSchema(extensions);
 function roundTrip(markdown) {
   const editor = new Editor({ element: document.createElement('div'), extensions, content: markdownToHtml(markdown, '/blog/') });
-  const result = documentToMarkdown(editor.state.doc);
+  // As the editor does: write back with the conventions the page already uses.
+  const result = documentToMarkdown(editor.state.doc, detectMarkdownStyle(markdown));
   editor.destroy();
   return result;
 }
@@ -215,4 +216,34 @@ test('a link around inline code keeps its link', () => {
   for (const source of ['[use `x`](https://x.test)\n', 'Run [`npm test`](https://docs.npmjs.com "npm") first.\n']) {
     assert.equal(roundTrip(source), source);
   }
+});
+
+test('saving keeps the page own Markdown conventions', () => {
+  const sources = {
+    'star bullets': '* one\n* two\n',
+    'plus bullets': '+ one\n+ two\n',
+    'underscore emphasis': 'Some _em_ and __strong__.\n',
+    'setext headings': 'Title\n=====\n\nSub\n---\n\nText\n',
+    'ordered with )': '1) one\n2) two\n',
+    'star rule': 'A\n\n***\n\nB\n',
+    'two-space hard break': 'Line one  \nLine two\n',
+    'autolink': 'Visit <https://getgrav.org> now.\n',
+    'table without outer pipes': 'A | B\n--- | ---\n1 | 2\n',
+  };
+  for (const [name, source] of Object.entries(sources)) assert.equal(roundTrip(source), source, name);
+});
+
+test('pages without those variants are written as before', () => {
+  const source = '# Title\n\n- one\n- two\n\n1. a\n2. b\n\nSome *em*, **strong**, [https://x.test](https://x.test)\\\nnext\n\n---\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n';
+  assert.equal(roundTrip(source), source);
+});
+
+test('* and _ are escaped only where they could become formatting', () => {
+  for (const source of ['Price 5 * 3 = 15 and a_b_c and snake_case_name.\n', 'A \\*literal\\* star and \\_literal\\_ underscore.\n', '\\* not a list\n']) {
+    assert.equal(roundTrip(source), source);
+  }
+});
+
+test('tight nested lists stay tight', () => {
+  for (const source of ['- A\n  - B\n  - C\n- D\n', '1. A\n   1. B\n2. C\n']) assert.equal(roundTrip(source), source);
 });

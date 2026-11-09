@@ -1,9 +1,24 @@
 const htmlEntities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => htmlEntities[char]);
-/** Escapes only what Markdown would interpret inside prose; block markers only where a line could start. */
+/**
+ * Escapes only what Markdown would interpret inside prose; block markers only where a line could start.
+ * `*` and `_` stay bare where they cannot delimit emphasis: surrounded by spaces (`5 * 3`), and `_`
+ * inside a word (`snake_case`). At a text node's edge the neighbour is unknown, so they are escaped.
+ */
+const isSpace = (char) => char !== undefined && /\s/.test(char);
+const isWordChar = (char) => char !== undefined && /[\p{L}\p{N}]/u.test(char);
 export const escapeMarkdown = (value) => String(value ?? '')
-  .replace(/([\\`*_\[\]<]|~~)/g, (char) => char === '~~' ? '\\~\\~' : '\\' + char)
-  .replace(/^(\s*)([#>+-])(?=\s|$)/gm, '$1\\$2')
+  .replace(/([\\`*_\[\]<]|~~)/g, (char, _match, offset, text) => {
+    if (char === '~~') return '\\~\\~';
+    if (char === '*' || char === '_') {
+      const before = text[offset - 1];
+      const after = text[offset + 1];
+      if (isSpace(before) && isSpace(after)) return char;
+      if (char === '_' && isWordChar(before) && isWordChar(after)) return char;
+    }
+    return '\\' + char;
+  })
+  .replace(/^(\s*)([#>+*-])(?=\s|$)/gm, '$1\\$2')
   .replace(/^(\s*\d+)([.)])(?=\s|$)/gm, '$1\\$2');
 /** Source stored in a placeholder attribute must be inert for marked, table detection and protectInline. */
 const encodeSource = (value) => String(value ?? '').replace(/[^\p{L}\p{N} ]/gu, (char) => `&#${char.codePointAt(0)};`);
@@ -213,9 +228,13 @@ export function nodeToMarkdown(node, depth = 0) {
   switch (node.type.name) {
     case 'doc': return blocks().trim() + '\n';
     case 'paragraph': return inlineChildren(node);
-    case 'heading': return '#'.repeat(node.attrs.level) + ' ' + inlineChildren(node);
+    case 'heading': {
+      const text = inlineChildren(node);
+      if (style.setext && node.attrs.level <= 2 && !text.includes('\n')) return `${text}\n${(node.attrs.level === 1 ? '=' : '-').repeat(Math.max(3, text.length))}`;
+      return '#'.repeat(node.attrs.level) + ' ' + text;
+    }
     case 'text': return node.text || '';
-    case 'hardBreak': return '\\\n';
+    case 'hardBreak': return style.hardBreak;
     case 'protectedBlock': return node.attrs.source;
     case 'tableStyle': {
       const body = blocks();
@@ -243,24 +262,25 @@ export function nodeToMarkdown(node, depth = 0) {
       const body = children().filter((child) => child.type.name !== 'alertTitle').map((child) => nodeToMarkdown(child, depth + 1)).join('\n\n');
       return ((alert ? `[!${alert}]\n` : '') + body).split('\n').map((line) => (line ? '> ' + line : '>')).join('\n');
     }
-    case 'bulletList': return children().map((child) => '- ' + indentContinuation(nodeToMarkdown(child, depth + 1), 2)).join('\n');
+    case 'bulletList': return children().map((child) => `${style.bullet} ` + indentContinuation(listItemMarkdown(child, node, depth), 2)).join('\n');
     case 'orderedList': {
       const start = Number(node.attrs.start || 1);
       return children().map((child, i) => {
-        const marker = `${start + i}. `;
-        return marker + indentContinuation(nodeToMarkdown(child, depth + 1), marker.length);
+        const marker = `${start + i}${style.ordered} `;
+        return marker + indentContinuation(listItemMarkdown(child, node, depth), marker.length);
       }).join('\n');
     }
     case 'listItem': return blocks();
-    case 'horizontalRule': return '---';
+    case 'horizontalRule': return style.hr;
     case 'table': {
       const rows = children().map((row) => childrenOf(row));
       if (!rows.length) return '';
       const header = rows[0] || [];
       const aligns = header.map((cell) => cell.attrs.align === 'right' ? '---:' : cell.attrs.align === 'center' ? ':---:' : cell.attrs.align === 'left' ? ':---' : '---');
       return [header, ...rows.slice(1)].map((row, i) => {
-        const line = '| ' + row.map(tableCellToMarkdown).join(' | ') + ' |';
-        return i === 0 ? line + '\n| ' + aligns.join(' | ') + ' |' : line;
+        const pipes = (cells) => (style.tablePipes ? `| ${cells.join(' | ')} |` : cells.join(' | '));
+        const line = pipes(row.map(tableCellToMarkdown));
+        return i === 0 ? line + '\n' + pipes(aligns) : line;
       }).join('\n');
     }
     default: return node.isText ? node.text || '' : node.isBlock ? blocks() : inlineChildren(node);
@@ -294,8 +314,8 @@ export function inlineNodeToMarkdown(node, { withoutLink = false } = {}) {
   const marks = node.marks || [];
   const has = (name) => marks.some((mark) => mark.type.name === name);
   if (has('code')) text = '`' + String(node.text || '').replace(/`/g, '\\`') + '`';
-  if (has('bold')) text = '**' + text + '**';
-  if (has('italic')) text = '*' + text + '*';
+  if (has('bold')) text = style.strong + text + style.strong;
+  if (has('italic')) text = style.em + text + style.em;
   if (has('strike')) text = '~~' + text + '~~';
   if (has('highlight')) text = '<mark>' + text + '</mark>';
   if (has('superscript')) text = '<sup>' + text + '</sup>';
@@ -311,7 +331,59 @@ export function inlineNodeToMarkdown(node, { withoutLink = false } = {}) {
   return text;
 }
 
-export function documentToMarkdown(doc) { return nodeToMarkdown(doc); }
+/** Serialize the document; `markdownStyle` (see detectMarkdownStyle) keeps the page's own conventions. */
+export function documentToMarkdown(doc, markdownStyle = {}) {
+  const previous = style;
+  style = { ...defaultStyle, ...markdownStyle };
+  try { return nodeToMarkdown(doc); } finally { style = previous; }
+}
+
+/** A list item's blocks; in a tight list the paragraph and a nested list are not separated by a blank line. */
+function listItemMarkdown(item, list, depth) {
+  const parts = childrenOf(item).map((child) => nodeToMarkdown(child, depth + 1)).filter(Boolean);
+  if (!list.attrs.tight) return parts.join('\n\n');
+  return parts.reduce((out, part, i) => {
+    if (!i) return part;
+    const nested = ['bulletList', 'orderedList'].includes(item.child(i).type.name);
+    return out + (nested ? '\n' : '\n\n') + part;
+  }, '');
+}
+
+/**
+ * Markdown conventions written on save. The defaults are what the serializer always wrote; a page that
+ * uses other conventions keeps them (detectMarkdownStyle), so saving does not rewrite untouched syntax.
+ */
+const defaultStyle = { bullet: '-', ordered: '.', em: '*', strong: '**', hr: '---', setext: false, hardBreak: '\\\n', autolinks: false, tablePipes: true };
+let style = defaultStyle;
+
+/** The conventions a page already uses, read outside fenced code. Unset ones keep the defaults. */
+export function detectMarkdownStyle(markdown) {
+  const lines = [];
+  let fence = null;
+  for (const line of String(markdown ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    const marker = line.match(/^\s*(`{3,}|~{3,})/);
+    if (marker) { fence = fence ? (marker[1][0] === fence ? null : fence) : marker[1][0]; continue; }
+    if (!fence) lines.push(line);
+  }
+  const text = lines.join('\n');
+  const found = {};
+  const hr = lines.find((line) => /^ {0,3}(?:(?:\*\s*){3,}|(?:_\s*){3,}|(?:-\s*){3,})$/.test(line) && !/^ {0,3}-+\s*$/.test(line));
+  if (hr) found.hr = hr.trim();
+  const bullet = lines.find((line) => /^\s*[-*+]\s+\S/.test(line) && !/^ {0,3}(?:\*\s*){3,}$/.test(line));
+  if (bullet) found.bullet = bullet.trim()[0];
+  const ordered = text.match(/^\s*\d{1,9}([.)])\s+\S/m);
+  if (ordered) found.ordered = ordered[1];
+  if ((text.match(/__(?=\S)/g) || []).length > (text.match(/\*\*(?=\S)/g) || []).length) found.strong = '__';
+  const underscores = (text.match(/(?<![\w_\\])_(?=[^\s_])/g) || []).length;
+  const stars = (text.match(/(?<![\w*\\])\*(?=[^\s*])/g) || []).length;
+  if (underscores > stars) found.em = '_';
+  if (/^[^\n]*\S[^\n]*\n {0,3}=+\s*$/m.test(text)) found.setext = true;
+  if (/ {2,}\n(?=\S)/.test(text)) found.hardBreak = '  \n';
+  if (/<[a-z][a-z0-9+.-]*:[^\s<>]+>/i.test(text)) found.autolinks = true;
+  const divider = lines.find((line) => isTableDivider(line));
+  if (divider && !divider.trim().startsWith('|')) found.tablePipes = false;
+  return found;
+}
 
 /**
  * Image width as Grav's `cropResize` media action in the Markdown URL (`photo.jpg?cropResize=640`):
@@ -462,5 +534,7 @@ export function linkMarkdown(content, attrs) {
     if (form === 'collapsed' && content === reference) return `[${content}][]`;
     return `[${content}][${reference}]`;
   }
+  // `<https://…>` when the page writes autolinks and the text is the URL itself.
+  if (style.autolinks && !attrs.title && attrs.href && /^[a-z][a-z0-9+.-]*:\S+$/i.test(attrs.href) && (content === attrs.href || content === escapeMarkdown(attrs.href))) return `<${attrs.href}>`;
   return `[${content}](${attrs.href || ''}${attrs.title ? ` "${String(attrs.title).replace(/"/g, '\\"')}"` : ''})`;
 }

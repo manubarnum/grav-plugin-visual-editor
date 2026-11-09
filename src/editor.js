@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { alertKinds, alignments, colorBlockTag, tableStyles, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
+import { alertKinds, alignments, colorBlockTag, detectMarkdownStyle, tableStyles, colorFromOpen, escapeHtml, imageWidth, isHexColor, withImageWidth } from './markdown.js';
 
 const icons = {
   undo: '↶', redo: '↷', heading: 'H', bold: 'B', italic: 'I', strike: 'S', link: '🔗', image: '▧',
@@ -58,6 +58,8 @@ export class VisualEditor {
     };
     this.mode = 'visual';
     this.markdown = String(markdown ?? '');
+    // The page's own conventions (bullets, emphasis, headings…), reused when saving.
+    this.markdownStyle = detectMarkdownStyle(this.markdown);
     this.onKeydown = (event) => { if (event.key === 'Escape' && this.dialogElement) this.closeDialog(); };
     this.buildShell();
     this.editor = new Editor({
@@ -92,6 +94,7 @@ export class VisualEditor {
     const value = String(markdown ?? '');
     if (value === this.markdown) return;
     this.markdown = value;
+    this.markdownStyle = detectMarkdownStyle(value);
     if (this.mode === 'source') this.source.value = value;
     else this.editor.commands.setContent(this.toHtml(value), false);
     this.updateCount();
@@ -669,7 +672,7 @@ export class VisualEditor {
 
   /** Called on user edits only; reports the Markdown to the host when it actually changed. */
   sync() {
-    const markdown = this.mode === 'source' ? this.source.value : documentToMarkdown(this.editor.state.doc);
+    const markdown = this.mode === 'source' ? this.source.value : documentToMarkdown(this.editor.state.doc, this.markdownStyle);
     if (markdown === this.markdown) return;
     this.markdown = markdown;
     this.updateCount();

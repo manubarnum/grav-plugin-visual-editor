@@ -330,6 +330,26 @@ const InlineRaw = Node.create({
   renderHTML({ node }) { return ['span', { class: 've-inline-raw', 'data-source': node.attrs.source, title: node.attrs.source }, node.attrs.source]; },
 });
 
+/**
+ * Whether a parsed list was tight (`- A\n  - B`): marked renders tight items without <p>. Lists
+ * created in the editor have no value and keep the previous output.
+ */
+const ListTightness = Extension.create({
+  name: 'listTightness',
+  addGlobalAttributes() {
+    return [{
+      types: ['bulletList', 'orderedList'],
+      attributes: {
+        tight: {
+          default: null,
+          parseHTML: (element) => ![...element.children].some((item) => item.firstElementChild?.tagName === 'P'),
+          renderHTML: () => ({}),
+        },
+      },
+    }];
+  },
+});
+
 const BlockDrag = Extension.create({
   name: 'blockDrag',
   addProseMirrorPlugins() { return [blockHandlePlugin()]; },
@@ -434,6 +454,7 @@ export function createExtensions(config) {
     BlockquoteWithAlert, AlertTitle, ColorBlock, AlignBlock, TableStyle, ProtectedBlock.configure(config.hooks || {}), InlineRaw,
     Table.configure({ resizable: true, lastColumnResizable: true, cellMinWidth: 64 }), TableRow, AlignedTableHeader, AlignedTableCell,
     ...(config.smartTypography ? [Typography] : []),
+    ListTightness,
     BlockDrag,
   ];
 }
