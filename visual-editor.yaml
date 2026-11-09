@@ -1,0 +1,6 @@
+enabled: true
+theme: auto
+smart_typography: true
+frontend_alerts: true
+toolbar: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,table,codeBlock,raw,shortcode,source'
+shortcodes: []

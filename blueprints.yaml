@@ -1,0 +1,51 @@
+name: Grav Visual Editor
+slug: visual-editor
+type: plugin
+version: 1.0.0
+description: A Markdown-preserving visual block editor for Grav with tables, alerts, media and shortcode support.
+icon: edit
+author:
+  name: Grav Visual Editor contributors
+  email: hello@example.invalid
+homepage: https://getgrav.org/
+keywords: [editor, markdown, wysiwym, admin, blocks, tiptap]
+license: MIT
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: admin, version: '>=1.10.0' }
+form:
+  validation: loose
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        general:
+          type: tab
+          title: Visual Editor
+          fields:
+            enabled:
+              type: toggle
+              label: Enable plugin
+              default: 1
+              options: { 1: Enabled, 0: Disabled }
+            theme:
+              type: select
+              label: Editor appearance
+              default: auto
+              options: { auto: Follow system, light: Light, dark: Dark }
+            smart_typography:
+              type: toggle
+              label: Smart typography
+              default: 1
+              options: { 1: Enabled, 0: Disabled }
+            frontend_alerts:
+              type: toggle
+              label: GitHub alert styles on public pages
+              default: 1
+              options: { 1: Enabled, 0: Disabled }
+            toolbar:
+              type: textarea
+              label: Toolbar buttons (comma-separated)
+              default: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,table,codeBlock,raw,shortcode,source'
+              description: 'Available: undo, redo, heading, bold, italic, strike, link, image, bulletList, orderedList, blockquote, alert, table, codeBlock, raw, shortcode, source.'
