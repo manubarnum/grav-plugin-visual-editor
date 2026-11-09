@@ -166,6 +166,25 @@ test('submitting a dialog does not bubble to the Admin2 page form', () => {
   pageForm.remove();
 });
 
+test('More formatting applies every inline HTML format, including the chained abbreviation dialog', () => {
+  const expected = { highlight: '<mark>world</mark>', keyboard: '<kbd>world</kbd>', citation: '<cite>world</cite>', subscript: '<sub>world</sub>', superscript: '<sup>world</sup>', abbreviation: '<abbr title="Expanded">world</abbr>' };
+  for (const [format, html] of Object.entries(expected)) {
+    const { el, changes } = mount('Hello world\n');
+    const editor = el.editor;
+    editor.editor.commands.setTextSelection({ from: 7, to: 12 });
+    editor.more();
+    editor.dialogElement.querySelector('select[name="format"]').value = format;
+    editor.dialogElement.querySelector('button[type="submit"]').click();
+    if (format === 'abbreviation') {
+      assert.ok(editor.dialogElement, 'the abbreviation dialog stays open');
+      editor.dialogElement.querySelector('input[name="title"]').value = 'Expanded';
+      editor.dialogElement.querySelector('button[type="submit"]').click();
+    }
+    assert.equal(changes.at(-1), `Hello ${html}\n`, format);
+    el.remove();
+  }
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

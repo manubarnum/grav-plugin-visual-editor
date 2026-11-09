@@ -352,7 +352,8 @@ export class VisualEditor {
       // Our form may sit inside the host's page form (Admin2): never let the submit reach it.
       event.preventDefault(); event.stopPropagation();
       const values = Object.fromEntries(new FormData(form).entries());
-      onSubmit(values); this.closeDialog();
+      // Close first: onSubmit may open the next dialog (e.g. More formatting → Abbreviation).
+      this.closeDialog(); onSubmit(values);
     });
     dialog.append(top, form); overlay.append(dialog); this.root.append(overlay);
     this.dialogElement = overlay;
