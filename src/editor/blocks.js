@@ -2,12 +2,13 @@
 import { TextSelection } from '@tiptap/pm/state';
 import { alertKinds, alignments, colorBlockTag, colorFromOpen, isHexColor } from '../markdown.js';
 import { shortcodeContainers } from './ui.js';
+import { t } from '../i18n.js';
 
 export const blockMethods = {
   alertDialog() {
     this.dialog('Insert alert', [
       { name: 'kind', label: 'Type', type: 'select', options: alertKinds.map((kind) => [kind, kind.charAt(0) + kind.slice(1).toLowerCase()]) },
-      { name: 'text', label: 'Message', type: 'textarea', value: 'Write something worth noticing.' },
+      { name: 'text', label: 'Message', type: 'textarea', value: t('Write something worth noticing.') },
     ], ({ kind, text }) => {
       const chain = this.editor.chain().focus();
       chain.setBlockquote().updateAttributes('blockquote', { alert: kind }).run();
@@ -135,7 +136,7 @@ export const blockMethods = {
   },
 
   editSourceDialog(attrs, apply) {
-    this.dialog(`Edit ${attrs.kind === 'shortcode' ? 'shortcode' : attrs.kind === 'code' ? 'code block' : attrs.kind.toUpperCase()} source`, [
+    this.dialog(t('Edit {kind} source', { kind: t(attrs.kind === 'shortcode' ? 'shortcode' : attrs.kind === 'code' ? 'code block' : attrs.kind.toUpperCase()) }), [
       { name: 'source', label: 'Source (kept exactly as written)', type: 'textarea', required: true, value: attrs.source },
     ], ({ source }) => apply(source));
   },

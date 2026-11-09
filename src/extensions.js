@@ -17,6 +17,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { marked } from 'marked';
+import { t } from './i18n.js';
 import { alertKinds, addMediaAttributes, colorFromOpen, referenceDefinitions, resolveReferences, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -68,7 +69,7 @@ const ImageWithSource = Image.extend({
       const image = document.createElement('img');
       const handle = document.createElement('span');
       handle.className = 've-image-resize';
-      handle.title = 'Drag to resize';
+      handle.title = t('Drag to resize');
       handle.setAttribute('aria-hidden', 'true');
       dom.append(image, handle);
 
@@ -287,9 +288,9 @@ const ProtectedBlock = Node.create({
       const header = document.createElement('div'); header.className = 've-protected-header';
       const label = document.createElement('span');
       const names = { twig: 'Twig', html: 'HTML', shortcode: 'Shortcode', code: 'Code block' };
-      label.textContent = names[node.attrs.kind] || 'Protected source';
-      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit source';
-      const previewButton = document.createElement('button'); previewButton.type = 'button'; previewButton.textContent = 'Preview';
+      label.textContent = t(names[node.attrs.kind] || 'Protected source');
+      const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = t('Edit source');
+      const previewButton = document.createElement('button'); previewButton.type = 'button'; previewButton.textContent = t('Preview');
       previewButton.hidden = node.attrs.kind !== 'shortcode' || typeof options.preview !== 'function';
       header.append(label, edit, previewButton); dom.append(header);
       const pre = document.createElement('pre'); pre.textContent = node.attrs.source; dom.append(pre);
@@ -301,7 +302,7 @@ const ProtectedBlock = Node.create({
       edit.addEventListener('click', () => {
         // window.prompt is single-line and would flatten multi-line HTML/Twig: prefer the host dialog.
         if (typeof options.editSource === 'function') options.editSource({ ...node.attrs }, apply);
-        else apply(window.prompt('Edit the source without changing its format:', node.attrs.source));
+        else apply(window.prompt(t('Edit the source without changing its format:'), node.attrs.source));
       });
       previewButton.addEventListener('click', async () => {
         previewButton.disabled = true;
@@ -313,7 +314,7 @@ const ProtectedBlock = Node.create({
           if (!preview.isConnected) dom.append(preview);
           else preview.hidden = !preview.hidden;
         } catch (error) {
-          options.notify?.(error.message || 'Preview is unavailable.', true);
+          options.notify?.(error.message || t('Preview is unavailable.'), true);
         } finally { previewButton.disabled = false; }
       });
       return { dom, update(updated) { if (updated.type.name !== 'protectedBlock') return false; node = updated; pre.textContent = node.attrs.source; return true; } };
@@ -370,7 +371,7 @@ export function blockHandlePlugin() {
         const node = $pos.node(depth);
         const widget = document.createElement('button');
         widget.type = 'button'; widget.className = 've-drag-handle'; widget.title = 'Drag to reorder this block';
-        widget.setAttribute('aria-label', 'Drag to reorder this block'); widget.textContent = '⠿';
+        widget.setAttribute('aria-label', t('Drag to reorder this block')); widget.textContent = '⠿';
         widget.addEventListener('click', () => {
           widget.dispatchEvent(new CustomEvent('visual-editor-select-block', { bubbles: true, detail: { pos } }));
         });

@@ -1,6 +1,7 @@
 /** VisualEditor methods — Images: media picker and upload, drag/paste, image bar (width, alt text). Mixed into VisualEditor.prototype in ../editor.js. */
 import { imageWidth, withImageWidth } from '../markdown.js';
 import { element, markdownSnippet } from './ui.js';
+import { t } from '../i18n.js';
 
 export const imageMethods = {
   selectedImage() {
@@ -21,7 +22,7 @@ export const imageMethods = {
     // Never ask Grav to enlarge: at or above the file's own width, serve the original.
     const size = width && natural && width >= natural ? null : width;
     this.updateImage({ src: withImageWidth(image.node.attrs.src, size) });
-    if (width && size === null) this.notify(`This image is only ${natural} px wide: kept at its original size.`);
+    if (width && size === null) this.notify(t('This image is only {width} px wide: kept at its original size.', { width: natural }));
   },
 
   imageWidthDialog() {
@@ -46,7 +47,7 @@ export const imageMethods = {
     try { list = (await this.services.listMedia?.()) || []; } catch (error) { this.notify(error.message, true); }
     const body = element('div', 've-media-body');
     const grid = element('div', 've-media-grid');
-    if (!list.length) grid.append(element('p', 've-empty', 'No images in this page’s media yet. Upload one below.'));
+    if (!list.length) grid.append(element('p', 've-empty', t('No images in this page’s media yet. Upload one below.')));
     list.forEach((item) => {
       const card = this.button('media', item.name, () => this.imageOptions(item));
       card.classList.add('ve-media-card');
@@ -66,7 +67,7 @@ export const imageMethods = {
       form.append(site);
     }
     if (this.services.upload) {
-      const fileLabel = element('label', 've-field ve-upload'); fileLabel.append(element('span', '', 'Upload an image to this page'));
+      const fileLabel = element('label', 've-field ve-upload'); fileLabel.append(element('span', '', t('Upload an image to this page')));
       const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml';
       fileLabel.append(input); form.append(fileLabel);
       const submit = this.button('upload', 'Upload image', async () => {
@@ -76,7 +77,7 @@ export const imageMethods = {
         submit.disabled = true;
         try {
           const item = await this.services.upload(file);
-          if (!item) throw new Error('The upload did not complete.');
+          if (!item) throw new Error(t('The upload did not complete.'));
           this.closeDialog(); this.imageOptions(item);
         } catch (error) { this.notify(error.message, true); submit.disabled = false; }
       });
@@ -126,8 +127,8 @@ export const imageMethods = {
     if (!images.length) return this.notify('Only images can be dropped here.', true);
     if (!this.services.upload) return this.notify('Image upload is not available here.', true);
     for (const file of images) {
-      if (file.size > this.config.maxUploadBytes) { this.notify(`${file.name} exceeds the upload limit.`, true); continue; }
-      this.status.textContent = `Uploading ${file.name}…`;
+      if (file.size > this.config.maxUploadBytes) { this.notify(t('{name} exceeds the upload limit.', { name: file.name }), true); continue; }
+      this.status.textContent = t('Uploading {name}…', { name: file.name });
       try {
         const item = await this.services.upload(file);
         if (!item) continue;

@@ -42,6 +42,8 @@ There is no linter. Real Admin2 behaviour can only be verified on a running Grav
 
 **Shortcode-backed blocks** (all editable containers parsed in `protectBlocks` before the generic shortcode protection, each tag alone on its line): colored blocks `[div class="ve-block" style="…"]`, alignment `[center]`/`[right]`/`[left]`/`[justify]` (shortcode-core's AlignShortcode), and per-table look `[div class="ve-table-plain|normal"]` around one table (`tableStyle` node, content `table`). They are wrapped at the document/container level only (`wrapBlocks`), never inside a list or quote, because shortcode-core only treats a tag as a block when it starts the line. The front-end CSS for plain tables (site option `plain_tables` and per-table class) is injected by `addTableStyles()` in PHP.
 
+**Interface language.** `src/i18n.js` `t(english, params)` translates through `src/i18n/<locale>.js` (English strings are the keys; missing → English); the locale is Admin2's `window.__GRAV_I18N.locale` (else `<html lang>`), read when an editor is created. `dialog()`, `button()` and `notify()` translate their texts themselves; other UI strings call `t()`. `tests/i18n.test.mjs` fails when a UI string has no French entry or a translation loses a `{placeholder}` — add new strings to `src/i18n/fr.js`.
+
 A Markdown round-trip change usually touches both directions: parse/protect in `markdown.js` + schema in `extensions.js` + serializer in `markdown.js`. Add a round-trip test (`roundTrip()` in `tests/markdown.test.mjs`). Field/host behaviour is tested in `tests/admin2-field.test.mjs`, which mimics Admin2's mounting.
 
 ### PHP

@@ -528,6 +528,24 @@ test('the footer describes how edits are saved in Admin2', () => {
   assert.equal(el.querySelector('.ve-footer span').textContent, 'Edits are kept as Markdown and saved with the page.');
 });
 
+test('the interface follows Admin2 in French, and stays English otherwise', () => {
+  try {
+    Object.defineProperty(window, '__GRAV_I18N', { value: { locale: 'fr', t: (key) => key }, configurable: true });
+    const { el } = mount('Text\n');
+    const editor = el.editor;
+    assert.equal(editor.toolbar.querySelector('[data-action="bold"]').title, 'Gras');
+    assert.equal(el.querySelector('.ve-footer span').textContent, 'Les modifications sont conservées en Markdown et enregistrées avec la page.');
+    assert.match(editor.count.textContent, /caractères/);
+    editor.link();
+    assert.equal(editor.dialogElement.querySelector('h2').textContent, 'Insérer un lien');
+    assert.equal(editor.dialogElement.querySelector('button[type="submit"]').textContent, 'Appliquer');
+    editor.closeDialog();
+    el.remove();
+  } finally { delete window.__GRAV_I18N; }
+  const { el } = mount('Text\n');
+  assert.equal(el.editor.toolbar.querySelector('[data-action="bold"]').title, 'Bold');
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

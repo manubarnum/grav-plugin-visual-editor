@@ -1,21 +1,22 @@
 /** VisualEditor methods — Generic modal dialogs built from field descriptions. Mixed into VisualEditor.prototype in ../editor.js. */
 import { element } from './ui.js';
+import { t } from '../i18n.js';
 
 export const dialogMethods = {
   dialog(title, fields, onSubmit, onRemove = null, removeLabel = 'Remove link') {
     this.closeDialog();
     const overlay = element('div', 've-dialog-overlay');
-    const dialog = element('section', 've-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', title);
+    const dialog = element('section', 've-dialog'); dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', t(title));
     dialog.tabIndex = -1;
-    const heading = element('h2', '', title); const close = this.button('close', 'Close dialog', () => this.closeDialog()); close.textContent = '×';
+    const heading = element('h2', '', t(title)); const close = this.button('close', 'Close dialog', () => this.closeDialog()); close.textContent = '×';
     const top = element('div', 've-dialog-header'); top.append(heading, close);
     const form = element('form', 've-dialog-form');
     fields.forEach((field) => {
-      const label = element('label', 've-field'); label.append(element('span', '', field.label));
+      const label = element('label', 've-field'); label.append(element('span', '', t(field.label)));
       let input;
       if (field.type === 'select') {
         input = document.createElement('select');
-        field.options.forEach(([value, text]) => { const option = document.createElement('option'); option.value = value; option.textContent = text; input.append(option); });
+        field.options.forEach(([value, text]) => { const option = document.createElement('option'); option.value = value; option.textContent = t(String(text)); input.append(option); });
       } else input = document.createElement(field.type === 'textarea' ? 'textarea' : 'input');
       if (field.type !== 'textarea' && field.type !== 'select') input.type = field.type || 'text';
       if (field.min) input.min = field.min; if (field.max) input.max = field.max;

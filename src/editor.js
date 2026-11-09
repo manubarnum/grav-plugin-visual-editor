@@ -2,6 +2,7 @@ import { Editor } from '@tiptap/core';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
 import { detectMarkdownStyle, escapeHtml, imageWidth } from './markdown.js';
 import { defaults, element, icons, labels, messages } from './editor/ui.js';
+import { detectLocale, setLocale, t } from './i18n.js';
 import { blockMethods } from './editor/blocks.js';
 import { dialogMethods } from './editor/dialog.js';
 import { imageMethods } from './editor/images.js';
@@ -29,6 +30,7 @@ export class VisualEditor {
         notify: (message, error) => this.notify(message, error),
       },
     };
+    setLocale(config.locale || detectLocale());
     this.mode = 'visual';
     this.markdown = String(markdown ?? '');
     // The page's own conventions (bullets, emphasis, headings…), reused when saving.
@@ -122,7 +124,7 @@ export class VisualEditor {
     if (this.config.plainTables) this.root.classList.add('ve-plain-tables');
     const header = element('div', 've-header');
     const identity = element('div', 've-identity');
-    identity.append(element('span', 've-mark', '✎'), element('div', '', 'Visual editor'));
+    identity.append(element('span', 've-mark', '✎'), element('div', '', t('Visual editor')));
     const status = element('span', 've-status', 'Markdown');
     identity.append(status);
     const modes = element('div', 've-modes');
@@ -130,11 +132,11 @@ export class VisualEditor {
     this.sourceButton = this.button('source', 'Source', () => this.setMode('source'), false);
     this.visualButton.setAttribute('aria-pressed', 'true'); this.sourceButton.setAttribute('aria-pressed', 'false');
     const themeButton = this.button('theme', 'Toggle editor appearance', () => this.toggleTheme(), false);
-    themeButton.textContent = '◐'; themeButton.title = 'Light / dark editor';
+    themeButton.textContent = '◐'; themeButton.title = t('Light / dark editor');
     const fullscreenButton = this.button('fullscreen', 'Toggle distraction-free editing', () => this.toggleFullscreen(), false);
     modes.append(this.visualButton, this.sourceButton, themeButton, fullscreenButton);
     header.append(identity, modes);
-    this.toolbar = element('div', 've-toolbar'); this.toolbar.setAttribute('role', 'toolbar'); this.toolbar.setAttribute('aria-label', 'Content formatting');
+    this.toolbar = element('div', 've-toolbar'); this.toolbar.setAttribute('role', 'toolbar'); this.toolbar.setAttribute('aria-label', t('Content formatting'));
     const tools = Array.isArray(this.config.toolbar) && this.config.toolbar.length ? this.config.toolbar : defaults;
     let previousGroup = '';
     tools.forEach((name) => {
@@ -165,16 +167,17 @@ export class VisualEditor {
     );
     this.editorWrap = element('div', 've-editor-wrap'); this.content = element('div', 've-content');
     this.source = element('textarea', 've-source'); this.source.spellcheck = false; this.source.hidden = true;
-    this.source.setAttribute('aria-label', 'Markdown source');
+    this.source.setAttribute('aria-label', t('Markdown source'));
     this.editorWrap.append(this.content, this.source);
     const footer = element('div', 've-footer');
-    this.status = element('span', '', messages.saved); this.count = element('span', 've-count');
+    this.status = element('span', '', t(messages.saved)); this.count = element('span', 've-count');
     footer.append(this.status, this.count);
     this.root.append(header, this.toolbar, this.tableBar, this.imageBar, this.editorWrap, footer);
     this.host.append(this.root);
   }
 
   button(name, label, action, symbol = true) {
+    label = t(label);
     const button = element('button', 've-button');
     button.type = 'button'; button.title = label; button.setAttribute('aria-label', label); button.dataset.action = name;
     if (symbol && icons[name]) { const icon = element('span', `ve-icon ve-icon-${name}`, icons[name]); icon.setAttribute('aria-hidden', 'true'); button.append(icon); }
@@ -296,7 +299,7 @@ export class VisualEditor {
     this.emit('change', { editor: this, markdown });
   }
 
-  updateCount() { this.count.textContent = `${this.markdown.length.toLocaleString()} characters · Markdown`; }
+  updateCount() { this.count.textContent = t('{count} characters · Markdown', { count: this.markdown.length.toLocaleString() }); }
 
   /** Refresh button states at most once per animation frame, whatever the number of transactions. */
   updateToolbar() {
@@ -325,14 +328,15 @@ export class VisualEditor {
     this.imageBar.hidden = !image;
     if (image) {
       const width = imageWidth(image.node.attrs.src);
-      this.imageSize.textContent = width ? `Shown at ${width} px` : 'Original size';
+      this.imageSize.textContent = width ? t('Shown at {width} px', { width }) : t('Original size');
     }
   }
 
   notify(message, error = false) {
+    message = t(message);
     this.status.textContent = message; this.status.classList.toggle('ve-error', error);
     window.clearTimeout(this.noticeTimer);
-    this.noticeTimer = window.setTimeout(() => { this.status.textContent = messages.saved; this.status.classList.remove('ve-error'); }, 6000);
+    this.noticeTimer = window.setTimeout(() => { this.status.textContent = t(messages.saved); this.status.classList.remove('ve-error'); }, 6000);
   }
 
   bindEvents() {
