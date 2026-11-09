@@ -343,10 +343,14 @@ export class VisualEditor {
     const actions = element('div', 've-dialog-actions');
     if (onRemove) { const remove = this.button('remove', 'Remove link', () => { onRemove(); this.closeDialog(); }); remove.classList.add('ve-danger'); actions.append(remove); }
     const cancel = this.button('cancel', 'Cancel', () => this.closeDialog());
-    const submit = this.button('submit', 'Apply', () => {}); submit.type = 'submit'; submit.classList.add('ve-primary');
+    // button() cancels the click's default action, which would also cancel a native submit:
+    // submit explicitly so required fields are still validated.
+    const submit = this.button('submit', 'Apply', () => (form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true }))));
+    submit.type = 'submit'; submit.classList.add('ve-primary');
     actions.append(cancel, submit); form.append(actions);
     form.addEventListener('submit', (event) => {
-      event.preventDefault();
+      // Our form may sit inside the host's page form (Admin2): never let the submit reach it.
+      event.preventDefault(); event.stopPropagation();
       const values = Object.fromEntries(new FormData(form).entries());
       onSubmit(values); this.closeDialog();
     });

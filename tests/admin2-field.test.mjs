@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 // Mimic Admin2's page editor: globals set by the SPA, then the field module imported with its tag.
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'https://grav.example/admin2/pages/edit/blog/post', pretendToBeVisual: true });
 const { window } = dom;
-for (const name of ['document', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'getComputedStyle', 'DOMParser', 'CustomEvent', 'Event', 'customElements', 'DragEvent', 'ClipboardEvent']) {
+for (const name of ['document', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'getComputedStyle', 'DOMParser', 'CustomEvent', 'Event', 'customElements', 'DragEvent', 'ClipboardEvent', 'FormData']) {
   if (window[name] !== undefined) Object.defineProperty(globalThis, name, { value: window[name], configurable: true, writable: true });
 }
 // Node 21+ defines a getter-only navigator; replace it with jsdom's.
@@ -13,6 +13,12 @@ Object.defineProperty(globalThis, 'navigator', { value: window.navigator, config
 Object.defineProperty(globalThis, 'window', { value: window, configurable: true, writable: true });
 globalThis.requestAnimationFrame = (callback) => callback();
 window.requestAnimationFrame = globalThis.requestAnimationFrame;
+// jsdom has no layout: ProseMirror's scroll-into-view needs these to exist.
+const noRect = { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 };
+for (const proto of [window.Element.prototype, window.Range.prototype]) {
+  proto.getClientRects ??= () => [];
+  proto.getBoundingClientRect ??= () => noRect;
+}
 window.__GRAV_FIELD_TAG = 'grav-visual-editor--visual-editor';
 window.__GRAV_API_SERVER_URL = 'https://grav.example';
 window.__GRAV_API_PREFIX = '/api/v1';
@@ -117,6 +123,47 @@ test('pasting a lone Markdown image becomes an image; ordinary text is left to t
   prose.clipboardData = transfer({ 'text/plain': 'Just [some] words' });
   assert.equal(el.editor.pasteFiles(prose), false);
   el.remove();
+});
+
+test('dialog Apply buttons run their action (link, heading, table)', () => {
+  const { el, changes } = mount('Hello world\n');
+  const editor = el.editor;
+  const tiptap = editor.editor;
+  const apply = () => editor.dialogElement.querySelector('button[type="submit"]').click();
+
+  tiptap.commands.setTextSelection({ from: 1, to: 6 });
+  editor.link();
+  editor.dialogElement.querySelector('input[name="href"]').value = 'https://getgrav.org';
+  apply();
+  assert.equal(editor.dialogElement, null, 'dialog closes after Apply');
+  assert.match(changes.at(-1), /\[Hello\]\(https:\/\/getgrav\.org\)/);
+
+  editor.heading();
+  editor.dialogElement.querySelector('select[name="style"]').value = '2';
+  apply();
+  assert.match(changes.at(-1), /^## /m);
+
+  tiptap.commands.setTextSelection(tiptap.state.doc.content.size - 1);
+  editor.tableDialog();
+  apply();
+  assert.match(changes.at(-1), /\| --- \|/);
+  el.remove();
+});
+
+test('submitting a dialog does not bubble to the Admin2 page form', () => {
+  const pageForm = document.createElement('form');
+  let pageSubmits = 0;
+  pageForm.addEventListener('submit', (event) => { pageSubmits += 1; event.preventDefault(); });
+  document.body.append(pageForm);
+  const el = document.createElement(tag);
+  el.field = { name: 'content', visual_editor: {} };
+  el.value = 'Text\n';
+  pageForm.append(el);
+  el.editor.abbreviation();
+  el.editor.dialogElement.querySelector('input[name="title"]').value = 'Expanded';
+  el.editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.equal(pageSubmits, 0);
+  pageForm.remove();
 });
 
 test('media listing keeps images only and maps Admin2 fields', async () => {
