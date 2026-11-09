@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { documentToMarkdown, markdownToHtml } from '../src/extensions.js';
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions } from '../src/extensions.js';
-import { normalizeTableRow, protectBlocks, protectInline, githubAlerts } from '../src/markdown.js';
+import { normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth } from '../src/markdown.js';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://example.test/admin/pages/home' });
 global.window = dom.window;
@@ -120,4 +120,18 @@ test('prose punctuation is not over-escaped, but leading block markers are', () 
 
 test('markdown alert conversion adds explicit semantic data', () => {
   assert.match(githubAlerts('<blockquote><p>[!TIP] Hint</p></blockquote>'), /data-alert="TIP"/);
+});
+
+test('image widths are stored as Grav cropResize actions, keeping other media actions', () => {
+  assert.equal(imageWidth('photo.jpg'), null);
+  assert.equal(imageWidth('photo.jpg?lightbox&cropResize=300,200'), 300);
+  assert.equal(withImageWidth('photo.jpg', 640), 'photo.jpg?cropResize=640');
+  assert.equal(withImageWidth('photo.jpg?lightbox&cropResize=300', 960), 'photo.jpg?lightbox&cropResize=960');
+  assert.equal(withImageWidth('photo.jpg?cropResize=300#top', null), 'photo.jpg#top');
+});
+
+test('resized images round-trip unchanged', () => {
+  for (const source of ['![A photo](photo.jpg?cropResize=640)\n', '![A photo](photo.jpg?lightbox&cropResize=320 "Title")\n']) {
+    assert.equal(roundTrip(source), source);
+  }
 });

@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 // Mimic Admin2's page editor: globals set by the SPA, then the field module imported with its tag.
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'https://grav.example/admin2/pages/edit/blog/post', pretendToBeVisual: true });
 const { window } = dom;
-for (const name of ['document', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'getComputedStyle', 'DOMParser', 'CustomEvent', 'Event', 'customElements', 'DragEvent', 'ClipboardEvent', 'FormData']) {
+for (const name of ['document', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'getComputedStyle', 'DOMParser', 'CustomEvent', 'Event', 'customElements', 'DragEvent', 'ClipboardEvent', 'FormData', 'MouseEvent']) {
   if (window[name] !== undefined) Object.defineProperty(globalThis, name, { value: window[name], configurable: true, writable: true });
 }
 // Node 21+ defines a getter-only navigator; replace it with jsdom's.
@@ -183,6 +183,52 @@ test('More formatting applies every inline HTML format, including the chained ab
     assert.equal(changes.at(-1), `Hello ${html}\n`, format);
     el.remove();
   }
+});
+
+test('resizing an image: presets, original size, custom width, details and the drag handle', () => {
+  const { el, changes } = mount('![A photo](photo.jpg)\n\nText\n');
+  const editor = el.editor;
+  const wrapper = el.querySelector('.ProseMirror .ve-image');
+  const image = wrapper.querySelector('img');
+  assert.ok(wrapper.querySelector('.ve-image-resize'), 'resize handle');
+  assert.equal(image.getAttribute('src'), 'https://grav.example/user/pages/blog/post/photo.jpg');
+  Object.defineProperty(image, 'naturalWidth', { value: 2000, configurable: true });
+
+  editor.editor.commands.setNodeSelection(0);
+  assert.equal(editor.imageBar.hidden, false, 'image bar shows for a selected image');
+  editor.imageBar.querySelector('[data-action="width-640"]').click();
+  assert.equal(changes.at(-1), '![A photo](photo.jpg?cropResize=640)\n\nText\n');
+  assert.equal(el.querySelector('.ProseMirror .ve-image img').style.width, '640px');
+  assert.equal(editor.imageSize.textContent, 'Shown at 640 px');
+
+  editor.imageBar.querySelector('[data-action="width-custom"]').click();
+  editor.dialogElement.querySelector('input[name="width"]').value = '500';
+  editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.match(changes.at(-1), /photo\.jpg\?cropResize=500\)/);
+
+  editor.imageBar.querySelector('[data-action="image-details"]').click();
+  editor.dialogElement.querySelector('input[name="alt"]').value = 'Roses';
+  editor.dialogElement.querySelector('input[name="title"]').value = 'Race';
+  editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.match(changes.at(-1), /^!\[Roses\]\(photo\.jpg\?cropResize=500 "Race"\)/);
+
+  editor.imageBar.querySelector('[data-action="width-original"]').click();
+  assert.match(changes.at(-1), /^!\[Roses\]\(photo\.jpg "Race"\)/);
+
+  // Drag the corner handle 200px to the left from a 900px display width.
+  const shown = el.querySelector('.ProseMirror .ve-image img');
+  Object.defineProperty(shown, 'naturalWidth', { value: 2000, configurable: true });
+  shown.getBoundingClientRect = () => ({ width: 900, height: 600, top: 0, left: 0, right: 900, bottom: 600 });
+  const handle = el.querySelector('.ProseMirror .ve-image-resize');
+  const pointer = (type, x) => { const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x }); return event; };
+  handle.dispatchEvent(pointer('pointerdown', 900));
+  window.dispatchEvent(pointer('pointermove', 700));
+  window.dispatchEvent(pointer('pointerup', 700));
+  assert.match(changes.at(-1), /photo\.jpg\?cropResize=700 "Race"\)/);
+
+  editor.editor.commands.setTextSelection(editor.editor.state.doc.content.size - 1);
+  assert.equal(editor.imageBar.hidden, true, 'image bar hides when the image is not selected');
+  el.remove();
 });
 
 test('list buttons produce Markdown lists', async () => {

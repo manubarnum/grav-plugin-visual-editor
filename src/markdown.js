@@ -132,6 +132,12 @@ export function addMediaAttributes(html, pageMediaUrl = '') {
   if (typeof document === 'undefined') return html;
   const template = document.createElement('template');
   template.innerHTML = html;
+  // Images are block nodes in the editor: a paragraph holding only images would leave an empty
+  // paragraph behind when ProseMirror lifts them out, so unwrap it here.
+  template.content.querySelectorAll('p').forEach((paragraph) => {
+    const nodes = [...paragraph.childNodes].filter((node) => !(node.nodeType === 3 && !node.textContent.trim()));
+    if (nodes.length && nodes.every((node) => node.nodeName === 'IMG')) paragraph.replaceWith(...nodes);
+  });
   template.content.querySelectorAll('img').forEach((img) => {
     img.setAttribute('data-markdown-src', img.getAttribute('src') || '');
     img.setAttribute('alt', img.getAttribute('alt') || '');
@@ -229,3 +235,40 @@ export function inlineNodeToMarkdown(node) {
 }
 
 export function documentToMarkdown(doc) { return nodeToMarkdown(doc); }
+
+/**
+ * Image width as Grav's `cropResize` media action in the Markdown URL (`photo.jpg?cropResize=640`):
+ * Grav serves a resized copy, height derived from the aspect ratio, never cropped.
+ */
+const resizeParam = /^cropResize=(\d+)(?:,\d*)?$/i;
+
+function splitImageUrl(src) {
+  const value = String(src ?? '');
+  const hashAt = value.indexOf('#');
+  const hash = hashAt >= 0 ? value.slice(hashAt) : '';
+  const beforeHash = hashAt >= 0 ? value.slice(0, hashAt) : value;
+  const queryAt = beforeHash.indexOf('?');
+  return {
+    path: queryAt >= 0 ? beforeHash.slice(0, queryAt) : beforeHash,
+    params: queryAt >= 0 ? beforeHash.slice(queryAt + 1).split('&').filter(Boolean) : [],
+    hash,
+  };
+}
+
+/** The `cropResize` width of a Markdown image URL, or null. */
+export function imageWidth(src) {
+  for (const param of splitImageUrl(src).params) {
+    const match = param.match(resizeParam);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
+/** Sets (or, with a falsy width, removes) the `cropResize` width; other Grav media actions are kept in order. */
+export function withImageWidth(src, width) {
+  const { path, params, hash } = splitImageUrl(src);
+  const kept = params.filter((param) => !resizeParam.test(param));
+  const size = Math.round(Number(width) || 0);
+  if (size > 0) kept.push(`cropResize=${size}`);
+  return path + (kept.length ? '?' + kept.join('&') : '') + hash;
+}

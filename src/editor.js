@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { alertKinds, escapeHtml } from './markdown.js';
+import { alertKinds, escapeHtml, imageWidth, withImageWidth } from './markdown.js';
 
 const icons = {
   undo: '↶', redo: '↷', heading: 'H', bold: 'B', italic: 'I', strike: 'S', link: '🔗', image: '▧',
@@ -154,6 +154,17 @@ export class VisualEditor {
       ['alignLeft', 'Align left'], ['alignCenter', 'Align center'], ['alignRight', 'Align right'], ['toggleHeaderRow', 'Header row'], ['deleteTable', 'Delete table'],
     ];
     tableCommands.forEach(([command, label]) => this.tableBar.append(this.button(command, label, () => this.tableCommand(command))));
+    // Shown while an image is selected; widths become Grav's `?cropResize=` (resized copy, ratio kept).
+    this.imageBar = element('div', 've-tablebar ve-imagebar'); this.imageBar.hidden = true;
+    this.imageSize = element('span', 've-imagebar-size');
+    [[320, 'Small · 320 px'], [640, 'Medium · 640 px'], [960, 'Large · 960 px'], [null, 'Original size']].forEach(([width, label]) => {
+      this.imageBar.append(this.button(`width-${width || 'original'}`, label, () => this.setImageWidth(width)));
+    });
+    this.imageBar.append(
+      this.button('width-custom', 'Width…', () => this.imageWidthDialog()),
+      this.button('image-details', 'Alt text & title…', () => this.imageDetailsDialog()),
+      this.imageSize,
+    );
     this.editorWrap = element('div', 've-editor-wrap'); this.content = element('div', 've-content');
     this.source = element('textarea', 've-source'); this.source.spellcheck = false; this.source.hidden = true;
     this.source.setAttribute('aria-label', 'Markdown source');
@@ -161,7 +172,7 @@ export class VisualEditor {
     const footer = element('div', 've-footer');
     this.status = element('span', '', messages.saved); this.count = element('span', 've-count');
     footer.append(this.status, this.count);
-    this.root.append(header, this.toolbar, this.tableBar, this.editorWrap, footer);
+    this.root.append(header, this.toolbar, this.tableBar, this.imageBar, this.editorWrap, footer);
     this.host.append(this.root);
   }
 
@@ -306,6 +317,44 @@ export class VisualEditor {
       { name: 'rows', label: 'Rows', type: 'number', min: 1, max: 30, value: 3, required: true },
       { name: 'columns', label: 'Columns', type: 'number', min: 1, max: 12, value: 3, required: true },
     ], ({ rows, columns }) => this.editor.chain().focus().insertTable({ rows: Math.max(1, Math.min(30, Number(rows))), cols: Math.max(1, Math.min(12, Number(columns))), withHeaderRow: true }).run());
+  }
+
+  selectedImage() {
+    const { selection } = this.editor.state;
+    return selection.node?.type.name === 'image' ? { node: selection.node, pos: selection.from } : null;
+  }
+
+  updateImage(attributes) {
+    const image = this.selectedImage();
+    if (!image) return;
+    this.editor.chain().focus().command(({ tr }) => { tr.setNodeMarkup(image.pos, undefined, { ...image.node.attrs, ...attributes }); return true; }).setNodeSelection(image.pos).run();
+  }
+
+  setImageWidth(width) {
+    const image = this.selectedImage();
+    if (!image) return;
+    const natural = this.content.querySelector('.ProseMirror-selectednode img')?.naturalWidth || 0;
+    // Never ask Grav to enlarge: at or above the file's own width, serve the original.
+    const size = width && natural && width >= natural ? null : width;
+    this.updateImage({ src: withImageWidth(image.node.attrs.src, size) });
+    if (width && size === null) this.notify(`This image is only ${natural} px wide: kept at its original size.`);
+  }
+
+  imageWidthDialog() {
+    const image = this.selectedImage();
+    if (!image) return;
+    this.dialog('Image width', [
+      { name: 'width', label: 'Width in pixels (empty = original size)', type: 'number', min: 16, max: 6000, value: imageWidth(image.node.attrs.src) ?? '' },
+    ], ({ width }) => { this.editor.commands.setNodeSelection(image.pos); this.setImageWidth(Number(width) || null); });
+  }
+
+  imageDetailsDialog() {
+    const image = this.selectedImage();
+    if (!image) return;
+    this.dialog('Image details', [
+      { name: 'alt', label: 'Alternative text', required: true, value: image.node.attrs.alt || '' },
+      { name: 'title', label: 'Title (optional)', value: image.node.attrs.title || '' },
+    ], ({ alt, title }) => { this.editor.commands.setNodeSelection(image.pos); this.updateImage({ alt, title: title || null }); });
   }
 
   tableCommand(command) {
@@ -484,7 +533,7 @@ export class VisualEditor {
     this.visualButton.setAttribute('aria-pressed', String(mode === 'visual'));
     this.sourceButton.setAttribute('aria-pressed', String(mode === 'source'));
     this.toolbar.hidden = mode === 'source';
-    this.tableBar.hidden = true;
+    this.tableBar.hidden = true; this.imageBar.hidden = true;
     this.updateToolbar();
   }
 
@@ -515,6 +564,12 @@ export class VisualEditor {
       if (name === 'redo') button.disabled = !this.editor.can().redo();
     });
     const inTable = this.editor.isActive('table'); this.tableBar.hidden = !inTable || this.mode === 'source';
+    const image = this.mode === 'visual' ? this.selectedImage() : null;
+    this.imageBar.hidden = !image;
+    if (image) {
+      const width = imageWidth(image.node.attrs.src);
+      this.imageSize.textContent = width ? `Shown at ${width} px` : 'Original size';
+    }
   }
 
   notify(message, error = false) {
