@@ -486,6 +486,43 @@ test('page media is read once per render, not once per image', () => {
   } finally { window.__GRAV_PAGE_MEDIA = original; }
 });
 
+test('distraction-free editing lifts the editor above the admin page, then puts it back', async () => {
+  VisualEditorField.changeDelay = 10000;
+  const pageFrame = document.createElement('div'); // stands for an Admin2 container with its own stacking context
+  document.body.append(pageFrame);
+  const el = document.createElement(tag);
+  mounted.add(el);
+  const changes = [];
+  el.field = { name: 'content', visual_editor: {} };
+  el.value = 'Text\n';
+  el.addEventListener('change', (event) => { if (event.target === el) changes.push(event.detail); });
+  pageFrame.append(el);
+  const editor = el.editor;
+  const toggle = () => editor.root.querySelector('[data-action="fullscreen"]').click();
+
+  toggle();
+  assert.ok(editor.root.parentElement === document.body, 'out of every admin container');
+  assert.ok(editor.root.classList.contains('ve-fullscreen'));
+
+  // Pending edits still reach Admin2 when focus leaves the full-screen editor.
+  editor.editor.commands.setTextSelection(3);
+  editor.editor.commands.insertContent('x');
+  const outside = document.createElement('button');
+  document.body.append(outside);
+  editor.root.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true, relatedTarget: outside }));
+  assert.deepEqual(changes, ['Texxt\n']);
+
+  toggle();
+  assert.ok(editor.root.parentElement === el, 'back in the field');
+  assert.ok(!editor.root.classList.contains('ve-fullscreen'));
+
+  toggle();
+  el.remove();
+  assert.ok(document.querySelector('.ve-editor') === null, 'removing the field also removes a full-screen editor');
+  pageFrame.remove();
+  outside.remove();
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

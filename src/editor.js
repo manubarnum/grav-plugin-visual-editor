@@ -83,6 +83,25 @@ export class VisualEditor {
     this.emit('ready', { editor: this, tiptap: this.editor });
   }
 
+  /**
+   * Distraction-free editing. The frame is position:fixed, but inside the host page a container with its
+   * own stacking context (Admin2's layout) kept the page header above it: lift the frame to <body> while
+   * full screen, and put it back where it was (a comment marks the spot) when leaving.
+   */
+  toggleFullscreen() {
+    const entering = !this.root.classList.contains('ve-fullscreen');
+    if (entering) {
+      this.fullscreenAnchor = document.createComment('visual-editor');
+      this.root.before(this.fullscreenAnchor);
+      document.body.append(this.root);
+    } else if (this.fullscreenAnchor) {
+      this.fullscreenAnchor.replaceWith(this.root);
+      this.fullscreenAnchor = null;
+    }
+    this.root.classList.toggle('ve-fullscreen', entering);
+    if (this.mode === 'visual') this.editor.commands.focus();
+  }
+
   emit(name, detail) {
     this.host.dispatchEvent(new CustomEvent(`visual-editor:${name}`, { bubbles: true, composed: true, detail }));
   }
@@ -120,6 +139,7 @@ export class VisualEditor {
     this.closeDialog();
     document.removeEventListener('keydown', this.onKeydown);
     this.editor?.destroy();
+    this.fullscreenAnchor?.remove();
     this.root.remove();
   }
 
@@ -138,7 +158,7 @@ export class VisualEditor {
     this.visualButton.setAttribute('aria-pressed', 'true'); this.sourceButton.setAttribute('aria-pressed', 'false');
     const themeButton = this.button('theme', 'Toggle editor appearance', () => this.toggleTheme(), false);
     themeButton.textContent = '◐'; themeButton.title = 'Light / dark editor';
-    const fullscreenButton = this.button('fullscreen', 'Toggle distraction-free editing', () => this.root.classList.toggle('ve-fullscreen'), false);
+    const fullscreenButton = this.button('fullscreen', 'Toggle distraction-free editing', () => this.toggleFullscreen(), false);
     modes.append(this.visualButton, this.sourceButton, themeButton, fullscreenButton);
     header.append(identity, modes);
     this.toolbar = element('div', 've-toolbar'); this.toolbar.setAttribute('role', 'toolbar'); this.toolbar.setAttribute('aria-label', 'Content formatting');

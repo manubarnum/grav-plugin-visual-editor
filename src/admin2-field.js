@@ -139,10 +139,12 @@ export class VisualEditorField extends HTMLElement {
     if (readonly) this.editor.editor.setEditable(false);
     this.applyPageBackground();
     // Report pending edits before anything can read or save the page.
-    this.onFocusOut = (event) => { if (!this.contains(event.relatedTarget)) this.flushChange(); };
+    // Listen on the editor frame: in distraction-free mode it is moved out of this element.
+    this.onFocusOut = (event) => { if (!this.contains(event.relatedTarget) && !this.editor?.root.contains(event.relatedTarget)) this.flushChange(); };
     this.onSaveKey = (event) => { if ((event.ctrlKey || event.metaKey) && event.key?.toLowerCase() === 's') this.flushChange(); };
     this.onSaveEvent = () => this.flushChange();
     this.addEventListener('focusout', this.onFocusOut);
+    this.editor.root.addEventListener('focusout', this.onFocusOut);
     // Capture on window: runs before Admin2's own save shortcut and `grav:editor:save` listeners.
     window.addEventListener('keydown', this.onSaveKey, true);
     window.addEventListener('grav:editor:save', this.onSaveEvent, true);
@@ -165,6 +167,7 @@ export class VisualEditorField extends HTMLElement {
   disconnectedCallback() {
     this.flushChange();
     this.removeEventListener('focusout', this.onFocusOut);
+    this.editor?.root.removeEventListener('focusout', this.onFocusOut);
     window.removeEventListener('keydown', this.onSaveKey, true);
     window.removeEventListener('grav:editor:save', this.onSaveEvent, true);
     this.themeObserver?.disconnect();
