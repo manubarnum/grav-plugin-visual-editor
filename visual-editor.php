@@ -84,7 +84,12 @@ class VisualEditorPlugin extends Plugin
         $muted = $text === '#ffffff' ? 'rgba(255,255,255,.72)' : 'rgba(31,35,41,.68)';
         // Quark 2 (Blades/Pico) paints from these variables in both light and dark mode; the plain
         // html/body rules cover other themes. `html:root[data-theme]` outranks the theme's own selectors.
-        $css = "html:root,html:root[data-theme]{--q2-bg:{$color};--pico-background-color:{$color};"
+        // Surfaces (content card, alerts, forms) take the page color too, so no theme white is left;
+        // recessed areas (code, hovers) get a slightly stronger tint, the header stays translucent.
+        $css = "html:root,html:root[data-theme]{--q2-bg:{$color};--q2-bg-elev:{$color};"
+            . "--q2-bg-muted:color-mix(in srgb,{$color} 90%,{$text} 10%);"
+            . "--q2-nav-bg:color-mix(in srgb,{$color} 82%,transparent);"
+            . "--pico-background-color:{$color};--pico-card-background-color:{$color};"
             . "--q2-text:{$text};--q2-text-strong:{$text};--q2-text-muted:{$muted};--pico-color:{$text};--pico-muted-color:{$muted}}"
             . "html,body{background-color:{$color};color:{$text}}";
         $this->grav['assets']->addInlineCss($css, ['priority' => 5]);
