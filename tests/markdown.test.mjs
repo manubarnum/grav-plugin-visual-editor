@@ -131,6 +131,15 @@ test('image widths are stored as Grav cropResize actions, keeping other media ac
   assert.equal(withImageWidth('photo.jpg?cropResize=300#top', null), 'photo.jpg#top');
 });
 
+test('GIF and SVG widths use Grav resize (never resized as files: cropResize is ignored, animation kept)', () => {
+  assert.equal(withImageWidth('anim.gif', 320), 'anim.gif?resize=320');
+  assert.equal(withImageWidth('LOGO.SVG?lightbox', 200), 'LOGO.SVG?lightbox&resize=200');
+  assert.equal(imageWidth('anim.gif?resize=320'), 320);
+  assert.equal(withImageWidth('anim.gif?cropResize=300', 480), 'anim.gif?resize=480', 'a former cropResize is replaced');
+  assert.equal(withImageWidth('anim.gif?resize=300', null), 'anim.gif');
+  assert.equal(roundTrip('![Anim](anim.gif?resize=320)\n'), '![Anim](anim.gif?resize=320)\n');
+});
+
 test('resized images round-trip unchanged', () => {
   for (const source of ['![A photo](photo.jpg?cropResize=640)\n', '![A photo](photo.jpg?lightbox&cropResize=320 "Title")\n']) {
     assert.equal(roundTrip(source), source);

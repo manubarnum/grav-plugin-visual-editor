@@ -393,7 +393,12 @@ export function detectMarkdownStyle(markdown) {
  * Image width as Grav's `cropResize` media action in the Markdown URL (`photo.jpg?cropResize=640`):
  * Grav serves a resized copy, height derived from the aspect ratio, never cropped.
  */
-const resizeParam = /^cropResize=(\d+)(?:,\d*)?$/i;
+const resizeParam = /^(?:cropResize|resize)=(\d+)(?:,\d*)?$/i;
+/**
+ * Grav serves GIF ("animated") and SVG ("vector") files as they are (StaticImageMedium): `cropResize` is
+ * ignored there, and `resize=W` only sets `width:Wpx` on the image, which keeps a GIF animated.
+ */
+const staticImage = /\.(?:gif|svg)$/i;
 
 function splitImageUrl(src) {
   const value = String(src ?? '');
@@ -417,12 +422,15 @@ export function imageWidth(src) {
   return null;
 }
 
-/** Sets (or, with a falsy width, removes) the `cropResize` width; other Grav media actions are kept in order. */
+/**
+ * Sets (or, with a falsy width, removes) the display width: `cropResize` (a resized copy), or `resize` for
+ * GIF and SVG files, which Grav never resizes; other Grav media actions are kept in order.
+ */
 export function withImageWidth(src, width) {
   const { path, params, hash } = splitImageUrl(src);
   const kept = params.filter((param) => !resizeParam.test(param));
   const size = Math.round(Number(width) || 0);
-  if (size > 0) kept.push(`cropResize=${size}`);
+  if (size > 0) kept.push(`${staticImage.test(path) ? 'resize' : 'cropResize'}=${size}`);
   return path + (kept.length ? '?' + kept.join('&') : '') + hash;
 }
 
