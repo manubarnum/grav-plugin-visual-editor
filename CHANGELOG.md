@@ -1,3 +1,12 @@
+# v2.2.0
+## 11/10/2026
+
+1. [](#new)
+    * Collaborative editing with Admin2 (Sync plugin): shared document, participants' cursors, shared undo history; uses Admin2's Yjs instance (none bundled)
+    * Interface in French when Admin2 is in French
+1. [](#improved)
+    * The editor footer describes how edits are saved in Admin2
+
 # v2.1.0
 ## 11/09/2026
 

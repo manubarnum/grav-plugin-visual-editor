@@ -17,6 +17,8 @@ An independent, open-source visual Markdown editor for **Grav 2 and Admin2**. It
 - Supports abbreviation, citation, highlight, keyboard, superscript and subscript inline HTML.
 - Renders shortcode previews on demand through `shortcode-core`.
 - Adds a per-page background color (field under the editor), applied to the whole page on the site with readable text.
+- Shows its interface in French when Admin2 is in French (English otherwise).
+- Supports Admin2's collaborative editing (Sync plugin): shared document, other participants' cursors and a shared undo history; it uses Admin2's own Yjs instance and ships none.
 
 ## Requirements
 
