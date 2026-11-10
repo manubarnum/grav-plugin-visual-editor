@@ -24,6 +24,19 @@ class VisualEditorPlugin extends Plugin
     /** Admin2 custom field type: `admin-next/fields/<type>.js`, also the content_editor preference value. */
     public const FIELD_TYPE = 'visual-editor';
 
+    /**
+     * Page effects: frontmatter value => kind of particles and motion. Anything else is ignored.
+     * fall: layers drift down; twinkle: particles pulse.
+     */
+    public const PAGE_EFFECTS = [
+        'snow' => ['label' => 'Falling snow', 'kind' => 'snow', 'fall' => true, 'twinkle' => false],
+        'snow-still' => ['label' => 'Snow (still)', 'kind' => 'snow', 'fall' => false, 'twinkle' => false],
+        'stars' => ['label' => 'Twinkling stars', 'kind' => 'stars', 'fall' => false, 'twinkle' => true],
+        'stars-still' => ['label' => 'Stars (still)', 'kind' => 'stars', 'fall' => false, 'twinkle' => false],
+        'sparkles' => ['label' => 'Falling sparkles', 'kind' => 'sparkles', 'fall' => true, 'twinkle' => true],
+        'sparkles-still' => ['label' => 'Sparkles (still)', 'kind' => 'sparkles', 'fall' => false, 'twinkle' => false],
+    ];
+
     /** Gradient directions: frontmatter value => [label, CSS gradient opening]. Anything else is ignored. */
     public const GRADIENT_DIRECTIONS = [
         'to bottom' => ['Top to bottom', 'linear-gradient(to bottom'],
@@ -42,7 +55,7 @@ class VisualEditorPlugin extends Plugin
             'onApiBlueprintResolved' => [['onApiBlueprintResolved', 0]],
             'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0]],
             'onPageContentRaw' => [['addAlertStyles', 0]],
-            'onTwigSiteVariables' => [['addPageBackground', 0], ['addTableStyles', 0]],
+            'onTwigSiteVariables' => [['addPageBackground', 0], ['addTableStyles', 0], ['addPageEffect', 0]],
         ];
     }
 
@@ -86,6 +99,15 @@ class VisualEditorPlugin extends Plugin
             'Left to right' => 'De gauche à droite',
             'Diagonal' => 'En diagonale',
             'From the center' => 'Depuis le centre',
+            'Page effect' => 'Effet sur la page',
+            'A light decoration over the whole page on the site. Visitors who asked their system to reduce motion see it still.'
+                => 'Une légère décoration sur toute la page du site. Les visiteurs qui ont demandé à leur système de réduire les animations la voient figée.',
+            'Falling snow' => 'Neige qui tombe',
+            'Snow (still)' => 'Neige (figée)',
+            'Twinkling stars' => 'Étoiles scintillantes',
+            'Stars (still)' => 'Étoiles (figées)',
+            'Falling sparkles' => 'Paillettes qui tombent',
+            'Sparkles (still)' => 'Paillettes (figées)',
             'Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'
                 => 'Fond de cette page sur le site. Désactivé, la page garde le fond du thème ; la couleur du texte s’adapte automatiquement.',
         ],
@@ -155,6 +177,77 @@ class VisualEditorPlugin extends Plugin
                 . "body,#body-wrapper{background:transparent!important}";
         }
         $this->grav['assets']->addInlineCss($css, ['priority' => 5]);
+    }
+
+    /**
+     * Front end: snow, stars or sparkles over the page (`page_effect` frontmatter). CSS only: two fixed
+     * layers (body::before far, body::after near) tiled with dots, moved by transform (cheap to animate),
+     * never catching clicks, and still for visitors who prefer reduced motion.
+     */
+    public function addPageEffect(): void
+    {
+        if ($this->isAdmin() || !$this->isEnabled() || !$this->config->get('plugins.visual-editor.page_effects', true)) {
+            return;
+        }
+        $page = $this->grav['page'] ?? null;
+        if (!$page || !method_exists($page, 'header')) {
+            return;
+        }
+        $header = $page->header();
+        $effect = self::PAGE_EFFECTS[(string)($header->page_effect ?? '')] ?? null;
+        if ($effect === null) {
+            return;
+        }
+        $this->grav['assets']->addInlineCss(self::pageEffectCss($effect, self::safeColor((string)($header->background_color ?? ''))), ['priority' => 5]);
+    }
+
+    /** The CSS of one page effect; `$background` (validated) picks particle colors that show on it. */
+    public static function pageEffectCss(array $effect, ?string $background): string
+    {
+        // Light background (or unknown): soft blue-grey snow and deeper gold; dark background: white and pale gold.
+        $dark = $background !== null && self::contrastText($background) === '#ffffff';
+        $colors = [
+            'snow' => $dark ? ['rgba(255,255,255,.9)', 'rgba(255,255,255,.7)'] : ['rgba(122,146,180,.75)', 'rgba(122,146,180,.55)'],
+            'stars' => $dark ? ['rgba(255,236,170,.95)', 'rgba(255,255,255,.85)'] : ['rgba(212,160,23,.85)', 'rgba(232,160,190,.8)'],
+            'sparkles' => $dark ? ['rgba(255,214,120,.95)', 'rgba(255,190,230,.9)'] : ['rgba(212,160,23,.85)', 'rgba(219,112,160,.8)'],
+        ][$effect['kind']];
+        // Fixed dot layouts per tile (no randomness: the same page always looks the same).
+        $layers = [
+            'before' => ['tile' => 260, 'radius' => $effect['kind'] === 'snow' ? 1.6 : 1.1, 'color' => $colors[1], 'seconds' => 22,
+                'dots' => [[30, 40], [120, 15], [210, 80], [70, 150], [180, 190], [240, 230], [15, 220], [140, 110]]],
+            'after' => ['tile' => 380, 'radius' => $effect['kind'] === 'snow' ? 3.2 : 1.8, 'color' => $colors[0], 'seconds' => 13,
+                'dots' => [[60, 70], [250, 30], [330, 160], [150, 250], [20, 320], [290, 340]]],
+        ];
+        $css = '';
+        foreach ($layers as $pseudo => $layer) {
+            $images = [];
+            foreach ($layer['dots'] as [$x, $y]) {
+                $edge = $layer['radius'] + 1;
+                $images[] = "radial-gradient(circle at {$x}px {$y}px,{$layer['color']} 0 {$layer['radius']}px,transparent {$edge}px)";
+            }
+            $animations = [];
+            if ($effect['fall']) {
+                $seconds = $effect['kind'] === 'sparkles' ? (int)round($layer['seconds'] * 1.6) : $layer['seconds'];
+                $animations[] = "ve-fx-fall {$seconds}s linear infinite";
+            }
+            if ($effect['twinkle']) {
+                $animations[] = 've-fx-twinkle ' . ($pseudo === 'before' ? '3.2s' : '4.6s') . ' ease-in-out infinite alternate';
+            }
+            $tile = $layer['tile'];
+            $css .= "body::{$pseudo}{content:\"\";position:fixed;left:0;right:0;top:-{$tile}px;height:calc(100% + {$tile}px);"
+                . "pointer-events:none;z-index:2147483000;--ve-fx-tile:{$tile}px;"
+                . 'background-image:' . implode(',', $images) . ";background-size:{$tile}px {$tile}px;"
+                . ($animations ? 'animation:' . implode(',', $animations) . ';will-change:' . ($effect['fall'] ? 'transform' : 'opacity') : '')
+                . '}';
+        }
+        if ($effect['fall']) {
+            $css .= '@keyframes ve-fx-fall{from{transform:translateY(0)}to{transform:translateY(var(--ve-fx-tile))}}';
+        }
+        if ($effect['twinkle']) {
+            $css .= '@keyframes ve-fx-twinkle{from{opacity:.35}to{opacity:1}}';
+        }
+
+        return $css . '@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}';
     }
 
     /**
@@ -293,7 +386,7 @@ class VisualEditorPlugin extends Plugin
             }
             // Page background color right below the editor (lists only: Admin2 serializes field lists).
             if ($isList && is_array($field) && ($field['name'] ?? null) === 'content' && isset($field['visual_editor'])
-                && $this->config->get('plugins.visual-editor.page_background', true) && !$this->hasField($fields, self::BACKGROUND_FIELD)) {
+                && !$this->hasField($fields, self::BACKGROUND_FIELD) && !$this->hasField($fields, 'header.page_effect')) {
                 foreach ($this->pageFields() as $pageField) {
                     $out[] = $pageField;
                 }
@@ -303,8 +396,30 @@ class VisualEditorPlugin extends Plugin
         return $out;
     }
 
-    /** Fields added right below the editor: page background (solid or gradient). */
+    /** Fields added right below the editor: page background (solid or gradient), page effect. */
     private function pageFields(): array
+    {
+        $fields = $this->config->get('plugins.visual-editor.page_background', true) ? $this->backgroundFields() : [];
+        if ($this->config->get('plugins.visual-editor.page_effects', true)) {
+            $effects = [];
+            foreach (self::PAGE_EFFECTS as $value => $definition) {
+                $effects[] = ['value' => $value, 'label' => $this->label($definition['label'])];
+            }
+            $fields[] = [
+                'name' => 'header.page_effect',
+                'type' => 'select',
+                'label' => $this->label('Page effect'),
+                'help' => $this->label('A light decoration over the whole page on the site. Visitors who asked their system to reduce motion see it still.'),
+                'default' => 'snow',
+                'options' => $effects,
+                'toggleable' => true,
+            ];
+        }
+
+        return $fields;
+    }
+
+    private function backgroundFields(): array
     {
         $directions = [];
         foreach (self::GRADIENT_DIRECTIONS as $value => $definition) {

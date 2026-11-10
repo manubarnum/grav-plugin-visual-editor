@@ -16,7 +16,8 @@ An independent, open-source visual Markdown editor for **Grav 2 and Admin2**. It
 - Has visual/source modes, undo/redo, a draggable block handle, follows Admin2's light/dark mode, and optional smart typography.
 - Supports abbreviation, citation, highlight, keyboard, superscript and subscript inline HTML.
 - Renders shortcode previews on demand through `shortcode-core`.
-- Adds a per-page background color (field under the editor), applied to the whole page on the site with readable text.
+- Adds a per-page background color or two-color gradient (fields under the editor), applied to the whole page on the site with readable text; colored blocks can use a gradient too.
+- Adds an optional per-page effect: falling snow, twinkling stars or falling sparkles, animated or still (CSS only, still for visitors who prefer reduced motion).
 - Shows its interface in French when Admin2 is in French (English otherwise).
 - Supports Admin2's collaborative editing (Sync plugin): shared document, other participants' cursors and a shared undo history; it uses Admin2's own Yjs instance and ships none.
 
@@ -52,7 +53,8 @@ Plugin options (Admin2 → Plugins → Grav Visual Editor):
 |---|---|---|
 | `site_default` | on | The visual editor is the content editor for everyone who has not picked another one. |
 | `shortcode_previews` | on | Shortcode blocks can be previewed through shortcode-core. |
-| `page_background` | on | Adds the *Page background color* field under the editor. |
+| `page_background` | on | Adds the *Page background color* fields (solid or gradient) under the editor. |
+| `page_effects` | on | Adds the *Page effect* field (snow, stars, sparkles) under the editor. |
 | `plain_tables` | off | Every table on the site without background or borders (a single table can still be set otherwise from the editor). |
 | `theme` | auto | Editor appearance: follow Admin2, light or dark. |
 | `smart_typography` | on | Typographic quotes and dashes while typing. |

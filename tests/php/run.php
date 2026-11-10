@@ -58,7 +58,7 @@ function names(array $fields): array { return array_map(fn($field) => $field['na
 
 test('site default: the content field becomes the visual editor, with its client config', function () {
     $tab = contentTab(resolve(plugin(['plugins.visual-editor.toolbar' => 'bold, italic'])));
-    same(['header.title:text', 'content:visual-editor', 'header.background_color:colorpicker', 'header.background_color_2:colorpicker', 'header.background_direction:select', 'header.media_order:pagemedia'], names($tab));
+    same(['header.title:text', 'content:visual-editor', 'header.background_color:colorpicker', 'header.background_color_2:colorpicker', 'header.background_direction:select', 'header.page_effect:select', 'header.media_order:pagemedia'], names($tab));
     same(['bold', 'italic'], $tab[1]['visual_editor']['toolbar']);
     same(false, $tab[1]['visual_editor']['plainTables']);
 });
@@ -83,8 +83,8 @@ test('the page background field never overwrites a sibling and is not duplicated
     $plugin = plugin();
     $once = resolve($plugin);
     $twice = resolve($plugin, '', 'page', $once);
-    same(6, count(contentTab($twice)));
-    same('header.media_order', contentTab($twice)[5]['name']);
+    same(7, count(contentTab($twice)));
+    same('header.media_order', contentTab($twice)[6]['name']);
 });
 
 test('fields added to the page form follow the user\'s Admin2 language', function () {
@@ -98,7 +98,8 @@ test('fields added to the page form follow the user\'s Admin2 language', functio
 });
 
 test('page_background off: no background field', function () {
-    same(['header.title:text', 'content:visual-editor', 'header.media_order:pagemedia'], names(contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false])))));
+    same(['header.title:text', 'content:visual-editor', 'header.page_effect:select', 'header.media_order:pagemedia'], names(contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false])))));
+    same(['header.title:text', 'content:visual-editor', 'header.media_order:pagemedia'], names(contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false, 'plugins.visual-editor.page_effects' => false])))));
 });
 
 test('only page blueprints are touched, and nothing when the plugin is disabled', function () {
@@ -173,7 +174,7 @@ test('the page form offers a gradient: second color and direction after the back
     $tab = contentTab(resolve(plugin()));
     \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
     same(['header.background_color', 'header.background_color_2', 'header.background_direction'], array_column(array_slice($tab, 2, 3), 'name'));
-    same('header.media_order', $tab[5]['name'], 'nothing overwritten');
+    same('header.page_effect', $tab[5]['name'], 'nothing overwritten');
     same('Seconde couleur (dégradé)', $tab[3]['label']);
     same(['to bottom', 'to right', 'to bottom right', 'radial'], array_column($tab[4]['options'], 'value'));
     same('Depuis le centre', $tab[4]['options'][3]['label']);
@@ -201,6 +202,41 @@ test('mixing two colors gives the same result in PHP and JS (gradient text color
     same('#808080', VisualEditorPlugin::mixColors('#000', '#fff'));
     same('#141e28', VisualEditorPlugin::mixColors('rgb(10, 20, 30)', '#1e2832'));
     same(null, VisualEditorPlugin::mixColors('#fde2e4', 'red'));
+});
+
+test('the page form offers a page effect after the background fields, in the admin language', function () {
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'fr-FR';
+    $tab = contentTab(resolve(plugin()));
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
+    same('header.page_effect', $tab[5]['name']);
+    same('header.media_order', $tab[6]['name'], 'nothing overwritten');
+    same('Effet sur la page', $tab[5]['label']);
+    same(['snow', 'snow-still', 'stars', 'stars-still', 'sparkles', 'sparkles-still'], array_column($tab[5]['options'], 'value'));
+    same('Neige qui tombe', $tab[5]['options'][0]['label']);
+    same(['header.media_order'], array_column(array_slice(contentTab(resolve(plugin(['plugins.visual-editor.page_effects' => false]))), 5), 'name'), 'option off: no effect field');
+});
+
+test('page effects: CSS-only overlay that never blocks clicks, still for reduced motion, nothing otherwise', function () {
+    $css = function (array $header, array $config = []): string {
+        $assets = new Assets();
+        plugin($config, ['assets' => $assets, 'page' => new Page($header)])->addPageEffect();
+        return implode('', $assets->css);
+    };
+    $snow = $css(['page_effect' => 'snow']);
+    ok(str_contains($snow, 'body::before') && str_contains($snow, 'body::after'), 'two layers');
+    ok(str_contains($snow, 'pointer-events:none') && str_contains($snow, 'position:fixed'), 'overlay that lets clicks through');
+    ok(str_contains($snow, '@keyframes ve-fx-fall') && str_contains($snow, 'animation:'), 'animated');
+    ok(str_contains($snow, '@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}'), 'reduced motion');
+    $still = str_replace('@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}', '', $css(['page_effect' => 'snow-still']));
+    ok(str_contains($still, 'body::before') && !str_contains($still, 'animation') && !str_contains($still, 'will-change'), 'still variant has no animation');
+    ok(str_contains($css(['page_effect' => 'stars']), '@keyframes ve-fx-twinkle'), 'stars twinkle');
+    $sparkles = $css(['page_effect' => 'sparkles']);
+    ok(str_contains($sparkles, 've-fx-fall') && str_contains($sparkles, 've-fx-twinkle'), 'sparkles fall and twinkle');
+    ok(str_contains($css(['page_effect' => 'snow', 'background_color' => '#1d3557']), 'rgba(255,255,255,'), 'white snow on a dark page');
+    ok(str_contains($css(['page_effect' => 'snow', 'background_color' => '#fde2e4']), 'rgba(122,146,180,'), 'blue-grey snow on a light page');
+    same('', $css([]), 'no effect: no css');
+    same('', $css(['page_effect' => 'fireworks;}body{x']), 'unknown effect ignored');
+    same('', $css(['page_effect' => 'snow'], ['plugins.visual-editor.page_effects' => false]), 'option off');
 });
 
 // --- Tables ------------------------------------------------------------------------------------------
