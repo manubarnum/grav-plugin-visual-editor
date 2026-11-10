@@ -186,6 +186,7 @@ test('page effects: CSS-only overlay that never blocks clicks, still for reduced
     $snow = $css(['page_effect' => 'snow']);
     ok(str_contains($snow, 'body::before') && str_contains($snow, 'body::after'), 'two layers');
     ok(str_contains($snow, 'pointer-events:none') && str_contains($snow, 'position:fixed'), 'overlay that lets clicks through');
+    ok(substr_count($snow, 'background-repeat:repeat') === 2, 'tiles repeat across the page (Pico sets no-repeat on every ::before/::after)');
     ok(str_contains($snow, '@keyframes ve-fx-fall') && str_contains($snow, 'animation:'), 'animated');
     ok(str_contains($snow, '@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}'), 'reduced motion');
     $still = str_replace('@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}', '', $css(['page_effect' => 'snow-still']));

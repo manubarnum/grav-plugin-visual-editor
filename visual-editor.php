@@ -190,8 +190,8 @@ class VisualEditorPlugin extends Plugin
         ][$effect['kind']];
         // Far layer (before): many small particles, slow; near layer (after): fewer, bigger, faster.
         $layers = [
-            'before' => ['tile' => 320, 'count' => 18, 'size' => [2, 4], 'seconds' => 24, 'seed' => 7],
-            'after' => ['tile' => 460, 'count' => 12, 'size' => [4, 8], 'seconds' => 14, 'seed' => 3],
+            'before' => ['tile' => 300, 'count' => 26, 'size' => [2.5, 5], 'seconds' => 11, 'seed' => 7],
+            'after' => ['tile' => 440, 'count' => 18, 'size' => [5, 10], 'seconds' => 7, 'seed' => 3],
         ];
         $css = '';
         foreach ($layers as $pseudo => $layer) {
@@ -199,15 +199,15 @@ class VisualEditorPlugin extends Plugin
             $image = self::particleTile($effect['kind'], $tile, $layer['count'], $layer['size'], $colors, $layer['seed']);
             $animations = [];
             if ($effect['fall']) {
-                $seconds = $effect['kind'] === 'sparkles' ? (int)round($layer['seconds'] * 1.6) : $layer['seconds'];
+                $seconds = $effect['kind'] === 'sparkles' ? (int)round($layer['seconds'] * 1.3) : $layer['seconds'];
                 $animations[] = "ve-fx-fall {$seconds}s linear infinite";
             }
             if ($effect['twinkle']) {
-                $animations[] = 've-fx-twinkle ' . ($pseudo === 'before' ? '2.6s' : '3.8s') . ' ease-in-out infinite alternate';
+                $animations[] = 've-fx-twinkle ' . ($pseudo === 'before' ? '1.6s' : '2.4s') . ' ease-in-out infinite alternate';
             }
             $css .= "body::{$pseudo}{content:\"\";position:fixed;left:0;right:0;top:-{$tile}px;height:calc(100% + {$tile}px);"
                 . "pointer-events:none;z-index:2147483000;--ve-fx-tile:{$tile}px;"
-                . "background-image:url(\"{$image}\");background-size:{$tile}px {$tile}px;"
+                . "background-image:url(\"{$image}\");background-size:{$tile}px {$tile}px;background-repeat:repeat;"
                 . ($animations ? 'animation:' . implode(',', $animations) . ';will-change:' . ($effect['fall'] ? 'transform' : 'opacity') : '')
                 . '}';
         }
@@ -215,7 +215,7 @@ class VisualEditorPlugin extends Plugin
             $css .= '@keyframes ve-fx-fall{from{transform:translateY(0)}to{transform:translateY(var(--ve-fx-tile))}}';
         }
         if ($effect['twinkle']) {
-            $css .= '@keyframes ve-fx-twinkle{from{opacity:.3}to{opacity:1}}';
+            $css .= '@keyframes ve-fx-twinkle{from{opacity:.5}to{opacity:1}}';
         }
 
         return $css . '@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}';
