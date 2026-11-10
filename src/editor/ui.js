@@ -17,7 +17,7 @@ export const labels = {
 /** Where shortcode-backed blocks may be created: their tags must start a line (not inside a list or quote). */
 export const shortcodeContainers = ['doc', 'colorBlock', 'alignBlock'];
 
-export const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'alignLeft', 'alignCenter', 'alignRight', 'table', 'codeBlock', 'raw', 'shortcode', 'source'];
+export const defaults = ['undo', 'redo', 'heading', 'bold', 'italic', 'strike', 'link', 'image', 'bulletList', 'orderedList', 'blockquote', 'alert', 'colorBlock', 'alignLeft', 'alignCenter', 'alignRight', 'table', 'codeBlock', 'raw', 'shortcode', 'source', 'pageSettings', 'more'];
 export const messages = {
   visual: 'Visual', source: 'Source', saved: 'Edits are kept as Markdown and saved with the page.', copied: 'Source copied.',
 };

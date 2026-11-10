@@ -26,12 +26,14 @@ test('every plugin option has a form field, and the reverse', () => {
   assert.deepEqual(yamlOnly, [], 'options without a form field (shortcodes is edited in YAML on purpose)');
 });
 
-test('the toolbar default is the same in the YAML, the blueprint description and the editor', async () => {
-  const list = (text) => text.split(',').map((item) => item.trim().replace(/\.$/, '')).filter(Boolean);
-  const yamlToolbar = list(defaults.toolbar);
-  assert.deepEqual(list(formFields.toolbar.description.replace(/^Available:\s*/, '')), yamlToolbar);
+test('the toolbar buttons are the same in the YAML, the blueprint checkboxes and the editor', async () => {
   const { defaultConfig } = await import('../src/editor.js');
-  assert.deepEqual(defaultConfig.toolbar, yamlToolbar);
+  const { labels } = await import('../src/editor/ui.js');
+  assert.deepEqual(Object.keys(defaults.toolbar), defaultConfig.toolbar);
+  assert.ok(Object.values(defaults.toolbar).every((on) => on === true), 'every button on by default');
+  assert.deepEqual(Object.keys(formFields.toolbar.options), defaultConfig.toolbar);
+  assert.equal(formFields.toolbar.use, 'keys');
+  assert.deepEqual(defaultConfig.toolbar.filter((name) => !labels[name]), [], 'every button has a label');
 });
 
 test('the JS contrast rule matches the shared fixture (the PHP tests check the same file)', () => {

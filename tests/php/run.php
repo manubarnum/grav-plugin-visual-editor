@@ -59,10 +59,19 @@ function names(array $fields): array { return array_map(fn($field) => $field['na
 test('site default: the content field becomes the visual editor, with its client config', function () {
     $tab = contentTab(resolve(plugin(['plugins.visual-editor.toolbar' => 'bold, italic'])));
     same(['header.title:text', 'content:visual-editor', 'header.media_order:pagemedia'], names($tab), 'no field added: page settings live in the editor');
-    same(['bold', 'italic'], $tab[1]['visual_editor']['toolbar']);
+    same(['bold', 'italic', 'pageSettings', 'more'], $tab[1]['visual_editor']['toolbar'], 'former text list: the ✦ and ⋯ buttons it always had are kept');
     same(false, $tab[1]['visual_editor']['plainTables']);
     same(true, $tab[1]['visual_editor']['pageBackground']);
     same(true, $tab[1]['visual_editor']['pageEffects']);
+});
+
+test('toolbar from the plugin form checkboxes: only the ticked buttons, in order; nothing set: all', function () {
+    $toolbar = fn($value) => contentTab(resolve(plugin($value === null ? [] : ['plugins.visual-editor.toolbar' => $value])))[1]['visual_editor']['toolbar'];
+    same(['undo', 'bold', 'more'], $toolbar(['undo' => true, 'redo' => false, 'bold' => '1', 'italic' => '0', 'more' => true]));
+    same([], $toolbar(['undo' => false]), 'all unticked: empty toolbar');
+    same(['bold', 'link'], $toolbar(['bold', 'link']), 'a plain list is used as is');
+    same(null, $toolbar(null), 'no setting: the editor shows every button');
+    same(null, $toolbar(''), 'empty former text: every button');
 });
 
 test('a user who chose CodeMirror keeps the markdown field (config still attached)', function () {

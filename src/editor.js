@@ -160,7 +160,9 @@ export class VisualEditor {
     modes.append(this.visualButton, this.sourceButton, themeButton, fullscreenButton);
     header.append(identity, modes);
     this.toolbar = element('div', 've-toolbar'); this.toolbar.setAttribute('role', 'toolbar'); this.toolbar.setAttribute('aria-label', t('Content formatting'));
-    const tools = Array.isArray(this.config.toolbar) && this.config.toolbar.length ? this.config.toolbar : defaults;
+    // The host's list as given (an empty list is an empty toolbar); without one, every button.
+    const pageSettings = this.config.pageBackground !== false || this.config.pageEffects !== false;
+    const tools = (Array.isArray(this.config.toolbar) ? this.config.toolbar : defaults).filter((name) => name !== 'pageSettings' || pageSettings);
     let previousGroup = '';
     tools.forEach((name) => {
       if (!labels[name]) return;
@@ -169,8 +171,6 @@ export class VisualEditor {
       previousGroup = group;
       this.toolbar.append(this.toolButton(name));
     });
-    if ((this.config.pageBackground !== false || this.config.pageEffects !== false) && !tools.includes('pageSettings')) this.toolbar.append(this.toolButton('pageSettings'));
-    this.toolbar.append(this.toolButton('more'));
     this.tableBar = element('div', 've-tablebar'); this.tableBar.hidden = true;
     const tableCommands = [
       ['addRowBefore', '+ Row above'], ['addRowAfter', '+ Row below'], ['addColumnBefore', '+ Column before'], ['addColumnAfter', '+ Column after'],

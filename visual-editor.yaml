@@ -7,5 +7,28 @@ plain_tables: false
 theme: auto
 smart_typography: true
 frontend_alerts: false
-toolbar: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,colorBlock,alignLeft,alignCenter,alignRight,table,codeBlock,raw,shortcode,source'
+toolbar:
+  undo: true
+  redo: true
+  heading: true
+  bold: true
+  italic: true
+  strike: true
+  link: true
+  image: true
+  bulletList: true
+  orderedList: true
+  blockquote: true
+  alert: true
+  colorBlock: true
+  alignLeft: true
+  alignCenter: true
+  alignRight: true
+  table: true
+  codeBlock: true
+  raw: true
+  shortcode: true
+  source: true
+  pageSettings: true
+  more: true
 shortcodes: []

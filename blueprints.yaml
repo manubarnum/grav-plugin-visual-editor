@@ -77,7 +77,55 @@ form:
               default: 0
               options: { 1: Enabled, 0: Disabled }
             toolbar:
-              type: textarea
-              label: Toolbar buttons (comma-separated)
-              default: 'undo,redo,heading,bold,italic,strike,link,image,bulletList,orderedList,blockquote,alert,colorBlock,alignLeft,alignCenter,alignRight,table,codeBlock,raw,shortcode,source'
-              description: 'Available: undo, redo, heading, bold, italic, strike, link, image, bulletList, orderedList, blockquote, alert, colorBlock, alignLeft, alignCenter, alignRight, table, codeBlock, raw, shortcode, source.'
+              type: checkboxes
+              label: Toolbar buttons
+              help: Untick the buttons you do not want. Keyboard shortcuts (Ctrl+B, Ctrl+I…) keep working.
+              use: keys
+              default:
+                undo: true
+                redo: true
+                heading: true
+                bold: true
+                italic: true
+                strike: true
+                link: true
+                image: true
+                bulletList: true
+                orderedList: true
+                blockquote: true
+                alert: true
+                colorBlock: true
+                alignLeft: true
+                alignCenter: true
+                alignRight: true
+                table: true
+                codeBlock: true
+                raw: true
+                shortcode: true
+                source: true
+                pageSettings: true
+                more: true
+              options:
+                undo: '↶ Undo'
+                redo: '↷ Redo'
+                heading: 'H — Heading and paragraph'
+                bold: 'B — Bold'
+                italic: 'I — Italic'
+                strike: 'S — Strikethrough'
+                link: '🔗 Link'
+                image: '▧ Image (page media, upload, resize)'
+                bulletList: '•≡ Bulleted list'
+                orderedList: '1.≡ Numbered list'
+                blockquote: '❝ Blockquote'
+                alert: 'ⓘ GitHub-style alert'
+                colorBlock: '▣ Colored block (color or gradient)'
+                alignLeft: '⇤ Align left'
+                alignCenter: '↔ Center'
+                alignRight: '⇥ Align right'
+                table: '⊞ Table'
+                codeBlock: '{ } Code block'
+                raw: '</> HTML or Twig block'
+                shortcode: '[ ] Shortcode'
+                source: '⌘ Markdown source'
+                pageSettings: '✦ Page background and effects (also needs one of the page options above)'
+                more: '⋯ More formatting (highlight, subscript, superscript, keyboard, citation, abbreviation)'

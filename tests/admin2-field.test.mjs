@@ -372,6 +372,19 @@ test('page settings: former header fields are shown and overridden, even by an e
   el.remove();
 });
 
+test('toolbar: only the configured buttons, in order; an empty list is an empty toolbar', () => {
+  const actions = (toolbar) => {
+    const { el } = mount('Text\n', { name: 'content', type: 'visual-editor', visual_editor: { toolbar } });
+    const names = [...el.editor.toolbar.querySelectorAll('[data-action]')].map((button) => button.dataset.action);
+    el.remove();
+    return names;
+  };
+  assert.deepEqual(actions(['bold', 'link', 'more']), ['bold', 'link', 'more']);
+  assert.deepEqual(actions([]), []);
+  const all = actions(null);
+  assert.ok(all.includes('pageSettings') && all.at(-1) === 'more' && all[0] === 'undo', 'no list: every button');
+});
+
 test('page settings: no button when both site options are off', () => {
   const { el } = mount('Text\n', { name: 'content', type: 'visual-editor', visual_editor: { pageBackground: false, pageEffects: false } });
   assert.equal(el.editor.toolbar.querySelector('[data-action="pageSettings"]'), null);

@@ -58,7 +58,7 @@ Plugin options (Admin2 → Plugins → Grav Visual Editor):
 | `plain_tables` | off | Every table on the site without background or borders (a single table can still be set otherwise from the editor). |
 | `theme` | auto | Editor appearance: follow Admin2, light or dark. |
 | `smart_typography` | on | Typographic quotes and dashes while typing. |
-| `toolbar` | all buttons | Comma-separated list of toolbar buttons. |
+| `toolbar` | all buttons | One checkbox per toolbar button (including ✦ page background and effects, and ⋯ more formatting); untick the ones you do not want. |
 | `frontend_alerts` | off | GitHub alert styles on public pages (leave off with the *Github Markdown Alerts* plugin). |
 
 Raw HTML and Twig are preserved as source, not sanitized: only users who may already edit such content should have page access.

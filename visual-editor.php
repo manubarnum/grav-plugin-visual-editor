@@ -453,13 +453,45 @@ class VisualEditorPlugin extends Plugin
             'theme' => (string)$config->get('plugins.visual-editor.theme', 'auto'),
             'smartTypography' => (bool)$config->get('plugins.visual-editor.smart_typography', true),
             'shortcodePreviews' => (bool)$config->get('plugins.visual-editor.shortcode_previews', true),
-            'toolbar' => preg_split('/\s*,\s*/', (string)$config->get('plugins.visual-editor.toolbar', ''), -1, PREG_SPLIT_NO_EMPTY),
+            'toolbar' => $this->toolbar($config->get('plugins.visual-editor.toolbar')),
             'shortcodes' => is_array($shortcodes) ? array_values($shortcodes) : [],
             'maxUploadBytes' => $this->uploadLimit(),
             'plainTables' => (bool)$config->get('plugins.visual-editor.plain_tables', false),
             'pageBackground' => (bool)$config->get('plugins.visual-editor.page_background', true),
             'pageEffects' => (bool)$config->get('plugins.visual-editor.page_effects', true),
         ];
+    }
+
+    /**
+     * The toolbar buttons to show, in order: from the plugin form's checkboxes (name => on/off), or from the
+     * former comma-separated text (which always had the ✦ and ⋯ buttons, so they are kept). Null: all.
+     */
+    private function toolbar($value): ?array
+    {
+        if (is_array($value)) {
+            if (array_is_list($value)) {
+                return array_values(array_filter(array_map('strval', $value)));
+            }
+            $names = [];
+            foreach ($value as $name => $on) {
+                if (filter_var($on, FILTER_VALIDATE_BOOLEAN)) {
+                    $names[] = (string)$name;
+                }
+            }
+
+            return $names;
+        }
+        $names = preg_split('/\s*,\s*/', trim((string)$value), -1, PREG_SPLIT_NO_EMPTY);
+        if (!$names) {
+            return null;
+        }
+        foreach (['pageSettings', 'more'] as $always) {
+            if (!in_array($always, $names, true)) {
+                $names[] = $always;
+            }
+        }
+
+        return $names;
     }
 
     private function uploadLimit(): int
