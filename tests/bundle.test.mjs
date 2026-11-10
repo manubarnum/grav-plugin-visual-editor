@@ -32,6 +32,11 @@ test('the built field works without collaboration and without Admin2\'s Yjs', { 
   el.value = '# Hi\n';
   document.body.append(el);
   assert.equal(el.querySelector('.ProseMirror h1').textContent, 'Hi');
+  // The module carries every style the editor needs, alert styles included (no separate stylesheet in Admin2).
+  const css = document.getElementById('grav-visual-editor-styles')?.textContent || '';
+  assert.match(css, /\.ve-alert\{/);
+  assert.match(css, /\.ve-alert-warning\{/);
+  assert.match(css, /\[data-theme=dark\] \.ve-alert/);
   const tiptap = el.editor.editor;
   tiptap.commands.setTextSelection(3);
   tiptap.commands.insertContent('!');

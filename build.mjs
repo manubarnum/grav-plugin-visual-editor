@@ -12,7 +12,9 @@ const fieldModule = join('admin-next', 'fields', 'visual-editor.js');
 await rm(output, { recursive: true, force: true });
 await mkdir(join(plugin, 'admin-next', 'fields'), { recursive: true });
 
-const editorCss = await readFile(join(root, 'assets', 'css', 'editor.css'), 'utf8');
+// The field module carries all its styles: Admin2 loads no stylesheet for it. alerts.css is shared
+// with the front end (still shipped as a file for the frontend_alerts option).
+const editorCss = (await readFile(join(root, 'assets', 'css', 'alerts.css'), 'utf8')) + '\n' + (await readFile(join(root, 'assets', 'css', 'editor.css'), 'utf8'));
 /**
  * Yjs must be ONE instance in the page: Admin2 creates the shared fragment with its own copy and
  * publishes it on window.__GRAV_YJS__ (see src/collab.js). Bundling another copy would break
