@@ -109,8 +109,8 @@ export const imageMethods = {
     ], ({ alt, title, src }) => this.insertImage({ src, alt, title: title || null }));
   },
 
-  dropFiles(event, moved) {
-    if (moved) return this.moveImageIntoCell(event);
+  dropFiles(event, moved, slice = null) {
+    if (moved) return this.moveImageIntoCell(event, slice);
     const transfer = event.dataTransfer;
     if (transfer?.files?.length) {
       event.preventDefault();
@@ -132,21 +132,32 @@ export const imageMethods = {
   /**
    * Moving an image into a table cell: a cell holds inline content only, so the image is moved as an
    * inline image at the drop point (ProseMirror alone would put the block image beside the table).
+   * The dragged image comes from the drop's slice, its origin from `view.dragging.node` (the selection
+   * may have moved by then), else from the selection.
    */
-  moveImageIntoCell(event) {
-    const image = this.selectedImage();
+  moveImageIntoCell(event, slice = null) {
+    const { view } = this.editor;
+    const dragged = view.dragging?.node;
+    const sliceNode = slice?.content.childCount === 1 ? slice.content.firstChild : null;
+    const image = ['image', 'inlineImage'].includes(sliceNode?.type.name) ? sliceNode
+      : ['image', 'inlineImage'].includes(dragged?.node?.type.name) ? dragged.node
+        : this.selectedImage()?.node;
     if (!image) return false;
+    let origin = null;
+    if (dragged?.node?.type.name === image.type.name) origin = { from: dragged.from, to: dragged.to };
+    else if (this.selectedImage()) origin = { from: this.selectedImage().pos, to: this.selectedImage().pos + image.nodeSize };
+    if (!origin) return false;
     let target = null;
-    try { target = this.editor.view.posAtCoords({ left: event.clientX, top: event.clientY }); } catch { return false; }
+    try { target = view.posAtCoords({ left: event.clientX, top: event.clientY }); } catch { return false; }
     if (!target || !this.cellAt(target.pos)) return false;
     event.preventDefault();
-    const { schema } = this.editor.state;
-    const node = schema.nodes.inlineImage.create(image.node.attrs);
+    const node = this.editor.state.schema.nodes.inlineImage.create(image.attrs);
     this.editor.chain().focus().command(({ tr }) => {
-      tr.delete(image.pos, image.pos + image.node.nodeSize);
+      tr.delete(origin.from, origin.to);
       tr.insert(tr.mapping.map(target.pos), node);
       return true;
     }).run();
+    view.dragging = null;
     return true;
   },
 

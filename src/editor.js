@@ -58,7 +58,7 @@ export class VisualEditor {
       content,
       editorProps: {
         attributes: { 'aria-label': 'Visual Markdown editor', role: 'textbox', 'aria-multiline': 'true', spellcheck: 'true' },
-        handleDrop: (view, event, slice, moved) => this.dropFiles(event, moved),
+        handleDrop: (view, event, slice, moved) => this.dropFiles(event, moved, slice),
         handlePaste: (view, event) => this.pasteFiles(event),
         transformPastedHTML: (html) => flattenTableCells(html),
       },

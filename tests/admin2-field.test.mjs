@@ -961,3 +961,23 @@ test('an image in a table cell can be resized by dragging its corner handle', ()
   assert.equal(changes.at(-1), '| A |\n| --- |\n| ![Photo](photo.jpg?cropResize=340) |\n');
   el.remove();
 });
+
+test('moving a photo into a cell uses the dragged node, even when the selection moved away meanwhile', async () => {
+  const { el, changes } = mount('Text\n\n![Photo](p.jpg)\n\n| A |\n| --- |\n| one |\n');
+  const editor = el.editor;
+  const { view, state } = editor.editor;
+  const { NodeSelection } = await import('@tiptap/pm/state');
+  let photo = -1;
+  state.doc.descendants((node, pos) => { if (photo < 0 && node.type.name === 'image') photo = pos; });
+  const dragged = NodeSelection.create(state.doc, photo);
+  view.dragging = { slice: dragged.content(), move: true, node: dragged };
+  editor.editor.commands.setTextSelection(1); // as in Chromium: the cursor is back in the text at drop time
+  let end = 0;
+  editor.editor.state.doc.descendants((node, pos) => { if (!end && node.isText && node.text === 'one') end = pos + 3; });
+  view.posAtCoords = () => ({ pos: end, inside: -1 });
+  const event = new window.Event('drop', { cancelable: true });
+  assert.equal(editor.dropFiles(event, true, dragged.content()), true);
+  assert.equal(changes.at(-1), 'Text\n\n| A |\n| --- |\n| one![Photo](p.jpg) |\n');
+  assert.equal(view.dragging, null);
+  el.remove();
+});
