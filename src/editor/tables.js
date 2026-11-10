@@ -9,7 +9,15 @@ export const tableMethods = {
     this.dialog('Insert table', [
       { name: 'rows', label: 'Rows', type: 'number', min: 1, max: 30, value: 3, required: true },
       { name: 'columns', label: 'Columns', type: 'number', min: 1, max: 12, value: 3, required: true },
-    ], ({ rows, columns }) => this.editor.chain().focus().insertTable({ rows: Math.max(1, Math.min(30, Number(rows))), cols: Math.max(1, Math.min(12, Number(columns))), withHeaderRow: true }).run());
+    ], ({ rows, columns }) => {
+      const rowCount = Math.max(1, Math.min(30, Number(rows) || 1));
+      const columnCount = Math.max(1, Math.min(12, Number(columns) || 1));
+      const row = (cell) => ({ type: 'tableRow', content: Array.from({ length: columnCount }, () => ({ type: cell, content: [{ type: 'paragraph' }] })) });
+      const table = { type: 'table', content: [row('tableHeader'), ...Array.from({ length: rowCount - 1 }, () => row('tableCell'))] };
+      // After the current block (insertTable would split the paragraph at the cursor); cursor in the first cell.
+      const { target, at } = this.blockInsertionTarget();
+      this.editor.chain().focus().insertContentAt(target, table).setTextSelection(at + 4).run();
+    });
   },
 
   /** Table look: site default (no wrapper), or a `plain` / `normal` wrapper around this table. */

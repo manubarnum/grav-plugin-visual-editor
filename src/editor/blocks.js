@@ -25,18 +25,25 @@ export const blockMethods = {
           ...(paragraphs.length ? paragraphs : ['']).map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })),
         ],
       };
-      const { $from, to } = this.editor.state.selection;
-      // The block to insert after: the nearest one sitting directly in the document or a shortcode block.
-      let depth = $from.depth;
-      while (depth > 1 && !shortcodeContainers.includes($from.node(depth - 1).type.name)) depth -= 1;
-      let target = to;
-      if (depth >= 1) {
-        const block = $from.node(depth);
-        const empty = block.type.name === 'paragraph' && block.content.size === 0;
-        target = empty ? { from: $from.before(depth), to: $from.after(depth) } : $from.after(depth);
-      }
-      this.editor.chain().focus().insertContentAt(target, alert).run();
+      this.editor.chain().focus().insertContentAt(this.blockInsertionTarget().target, alert).run();
     });
+  },
+
+  /**
+   * Where a new block goes: after the current block that sits directly in the document (or in a
+   * colored/aligned block), or in place of it when it is an empty paragraph — never splitting a paragraph.
+   * `at` is the position the new block starts at.
+   */
+  blockInsertionTarget() {
+    const { $from, to } = this.editor.state.selection;
+    let depth = $from.depth;
+    while (depth > 1 && !shortcodeContainers.includes($from.node(depth - 1).type.name)) depth -= 1;
+    if (depth < 1) return { target: to, at: to };
+    const block = $from.node(depth);
+    if (block.type.name === 'paragraph' && block.content.size === 0) {
+      return { target: { from: $from.before(depth), to: $from.after(depth) }, at: $from.before(depth) };
+    }
+    return { target: $from.after(depth), at: $from.after(depth) };
   },
 
   /** The nearest block of `type` around the cursor, if any. */

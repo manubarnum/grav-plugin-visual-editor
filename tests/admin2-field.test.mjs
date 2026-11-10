@@ -712,6 +712,28 @@ test('the block handle drags the current block to another place', () => {
   assert.equal(handle.isConnected, false, 'removed with the editor');
 });
 
+test('Insert table goes after the current block, not inside it, and puts the cursor in the first cell', () => {
+  const { el, changes } = mount('Hello world\n\nAfter\n');
+  const editor = el.editor;
+  const insert = (rows, columns) => {
+    editor.tableDialog();
+    editor.dialogElement.querySelector('input[name="rows"]').value = String(rows);
+    editor.dialogElement.querySelector('input[name="columns"]').value = String(columns);
+    editor.dialogElement.querySelector('button[type="submit"]').click();
+  };
+  editor.editor.commands.setTextSelection(4); // in the middle of "Hello world"
+  insert(2, 2);
+  assert.equal(changes.at(-1), 'Hello world\n\n|  |  |\n| --- | --- |\n|  |  |\n\nAfter\n');
+  const { $from } = editor.editor.state.selection;
+  assert.equal($from.node($from.depth - 1).type.name, 'tableHeader', 'cursor in the first header cell');
+  assert.equal($from.index($from.depth - 2), 0);
+
+  const empty = mount('');
+  empty.el.editor.tableDialog();
+  empty.el.editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.equal(empty.changes.at(-1), '|  |  |  |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |\n', 'an empty paragraph is replaced');
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
