@@ -172,12 +172,19 @@ export class VisualEditor {
       group.forEach((name) => this.toolbar.append(this.toolButton(name)));
     });
     this.tableBar = element('div', 've-tablebar'); this.tableBar.hidden = true;
+    // [command, full label (tooltip), short text or icon]: the bar must fit on one line above the table.
     const tableCommands = [
-      ['addRowBefore', '+ Row above'], ['addRowAfter', '+ Row below'], ['addColumnBefore', '+ Column before'], ['addColumnAfter', '+ Column after'],
-      ['deleteRow', 'Delete row'], ['deleteColumn', 'Delete column'], ['mergeCells', 'Merge cells'], ['splitCell', 'Split cell'],
-      ['alignLeft', 'Align left'], ['alignCenter', 'Align center'], ['alignRight', 'Align right'], ['toggleHeaderRow', 'Header row'], ['tableStyle', 'Table style…'], ['deleteTable', 'Delete table'],
+      ['addRowBefore', '+ Row above', '+ Row ↑'], ['addRowAfter', '+ Row below', '+ Row ↓'], ['addColumnBefore', '+ Column before', '+ Col. ←'], ['addColumnAfter', '+ Column after', '+ Col. →'],
+      ['deleteRow', 'Delete row', '− Row'], ['deleteColumn', 'Delete column', '− Col.'], ['mergeCells', 'Merge cells', 'Merge'], ['splitCell', 'Split cell', 'Split'],
+      ['alignLeft', 'Align left', 'icon'], ['alignCenter', 'Align center', 'icon'], ['alignRight', 'Align right', 'icon'],
+      ['toggleHeaderRow', 'Header row', 'Header'], ['tableStyle', 'Table style…', 'Style…'], ['deleteTable', 'Delete table', '✕ Table'],
     ];
-    tableCommands.forEach(([command, label]) => this.tableBar.append(this.button(command, label, () => this.tableCommand(command))));
+    tableCommands.forEach(([command, label, short]) => {
+      const button = this.button(command, label, () => this.tableCommand(command), false);
+      if (short === 'icon') button.replaceChildren(iconSvg(command));
+      else button.textContent = t(short);
+      this.tableBar.append(button);
+    });
     // Shown while an image is selected; widths become Grav's `?cropResize=` (resized copy, ratio kept).
     this.imageBar = element('div', 've-tablebar ve-imagebar'); this.imageBar.hidden = true;
     this.imageSize = element('span', 've-imagebar-size');
