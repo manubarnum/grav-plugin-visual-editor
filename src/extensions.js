@@ -42,6 +42,77 @@ const Abbreviation = inlineMark('abbreviation', 'abbr', {
   title: { default: '', parseHTML: (element) => element.getAttribute('title') || '' },
 });
 
+/**
+ * Node view of an image shown at its `cropResize` width with a corner handle; dragging rewrites that width.
+ * Block images use a block frame; inline images (in a sentence or a table cell) an inline-block one.
+ */
+function resizableImageView(options, inline) {
+  return ({ node, editor, getPos }) => {
+    const dom = document.createElement(inline ? 'span' : 'div');
+    dom.className = 've-image';
+    if (inline) dom.classList.add('ve-image-inline');
+    dom.contentEditable = 'false';
+    const image = document.createElement('img');
+    if (inline) { image.className = 've-inline-image'; image.setAttribute('data-ve-inline', ''); }
+    const handle = document.createElement('span');
+    handle.className = 've-image-resize';
+    handle.title = t('Drag to resize');
+    handle.setAttribute('aria-hidden', 'true');
+    dom.append(image, handle);
+
+    const render = () => {
+      const src = node.attrs.src || '';
+      const display = resolveMedia(options.resolve, src);
+      if (image.getAttribute('src') !== display) image.setAttribute('src', display);
+      image.setAttribute('data-markdown-src', src);
+      image.alt = node.attrs.alt || '';
+      if (node.attrs.title) image.title = node.attrs.title; else image.removeAttribute('title');
+      const width = imageWidth(src);
+      image.style.width = width ? `${width}px` : '';
+      dom.dataset.width = width ? `${width}px` : 'Original';
+    };
+    render();
+
+    handle.addEventListener('pointerdown', (event) => {
+      if (!editor.isEditable || typeof getPos !== 'function') return;
+      event.preventDefault(); event.stopPropagation();
+      const startX = event.clientX;
+      const startWidth = image.getBoundingClientRect().width || image.width || 0;
+      const natural = image.naturalWidth || Infinity;
+      let width = startWidth;
+      dom.classList.add('is-resizing');
+      const move = (moveEvent) => {
+        width = Math.max(40, Math.min(natural, Math.round(startWidth + moveEvent.clientX - startX)));
+        image.style.width = `${width}px`;
+        dom.dataset.width = `${width}px`;
+      };
+      const stop = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', stop);
+        dom.classList.remove('is-resizing');
+        if (Math.round(width) === Math.round(startWidth)) return;
+        // At (or above) the file's own width, drop the resize so Grav serves the original.
+        const src = withImageWidth(node.attrs.src, width >= natural ? null : width);
+        editor.chain().command(({ tr }) => { tr.setNodeMarkup(getPos(), undefined, { ...node.attrs, src }); return true; }).run();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', stop);
+    });
+
+    return {
+      dom,
+      update(updated) {
+        if (updated.type !== node.type) return false;
+        node = updated; render(); return true;
+      },
+      selectNode() { dom.classList.add('ProseMirror-selectednode'); },
+      deselectNode() { dom.classList.remove('ProseMirror-selectednode'); },
+      stopEvent(event) { return event.target === handle; },
+      ignoreMutation() { return true; },
+    };
+  };
+}
+
 const ImageWithSource = Image.extend({
   addAttributes() {
     return {
@@ -58,71 +129,8 @@ const ImageWithSource = Image.extend({
     const width = imageWidth(markdownSrc);
     return ['img', mergeAttributes(attributes, { src: display, 'data-markdown-src': markdownSrc }, width ? { style: `width:${width}px` } : {})];
   },
-  /** Shows the image at its `cropResize` width with a corner handle; dragging rewrites that width. */
   addNodeView() {
-    const options = this.options;
-    return ({ node, editor, getPos }) => {
-      const dom = document.createElement('div');
-      dom.className = 've-image';
-      dom.contentEditable = 'false';
-      const image = document.createElement('img');
-      const handle = document.createElement('span');
-      handle.className = 've-image-resize';
-      handle.title = t('Drag to resize');
-      handle.setAttribute('aria-hidden', 'true');
-      dom.append(image, handle);
-
-      const render = () => {
-        const src = node.attrs.src || '';
-        const display = resolveMedia(options.resolve, src);
-        if (image.getAttribute('src') !== display) image.setAttribute('src', display);
-        image.setAttribute('data-markdown-src', src);
-        image.alt = node.attrs.alt || '';
-        if (node.attrs.title) image.title = node.attrs.title; else image.removeAttribute('title');
-        const width = imageWidth(src);
-        image.style.width = width ? `${width}px` : '';
-        dom.dataset.width = width ? `${width}px` : 'Original';
-      };
-      render();
-
-      handle.addEventListener('pointerdown', (event) => {
-        if (!editor.isEditable || typeof getPos !== 'function') return;
-        event.preventDefault(); event.stopPropagation();
-        const startX = event.clientX;
-        const startWidth = image.getBoundingClientRect().width || image.width || 0;
-        const natural = image.naturalWidth || Infinity;
-        let width = startWidth;
-        dom.classList.add('is-resizing');
-        const move = (moveEvent) => {
-          width = Math.max(40, Math.min(natural, Math.round(startWidth + moveEvent.clientX - startX)));
-          image.style.width = `${width}px`;
-          dom.dataset.width = `${width}px`;
-        };
-        const stop = () => {
-          window.removeEventListener('pointermove', move);
-          window.removeEventListener('pointerup', stop);
-          dom.classList.remove('is-resizing');
-          if (Math.round(width) === Math.round(startWidth)) return;
-          // At (or above) the file's own width, drop the resize so Grav serves the original.
-          const src = withImageWidth(node.attrs.src, width >= natural ? null : width);
-          editor.chain().command(({ tr }) => { tr.setNodeMarkup(getPos(), undefined, { ...node.attrs, src }); return true; }).run();
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', stop);
-      });
-
-      return {
-        dom,
-        update(updated) {
-          if (updated.type !== node.type) return false;
-          node = updated; render(); return true;
-        },
-        selectNode() { dom.classList.add('ProseMirror-selectednode'); },
-        deselectNode() { dom.classList.remove('ProseMirror-selectednode'); },
-        stopEvent(event) { return event.target === handle; },
-        ignoreMutation() { return true; },
-      };
-    };
+    return resizableImageView(this.options, false);
   },
 });
 
@@ -162,6 +170,9 @@ const InlineImage = Node.create({
   renderHTML({ HTMLAttributes }) {
     const markdownSrc = HTMLAttributes.src || '';
     return ['img', mergeAttributes(HTMLAttributes, { src: resolveMedia(this.options.resolve, markdownSrc), 'data-markdown-src': markdownSrc, 'data-ve-inline': '', class: 've-inline-image' })];
+  },
+  addNodeView() {
+    return resizableImageView(this.options, true);
   },
 });
 

@@ -945,3 +945,19 @@ test('images and table cells: insert in a cell, move a photo into a cell, image 
   assert.match(changes.at(-1), /one!\[Q\]\(q\.jpg\?cropResize=320\)/);
   el.remove();
 });
+
+test('an image in a table cell can be resized by dragging its corner handle', () => {
+  const { el, changes } = mount('| A |\n| --- |\n| ![Photo](photo.jpg) |\n');
+  const frame = el.querySelector('.ProseMirror td .ve-image.ve-image-inline');
+  assert.ok(frame, 'cell image shown in a resizable frame');
+  const shown = frame.querySelector('img');
+  Object.defineProperty(shown, 'naturalWidth', { value: 2000, configurable: true });
+  shown.getBoundingClientRect = () => ({ width: 600, height: 400, top: 0, left: 0, right: 600, bottom: 400 });
+  const handle = frame.querySelector('.ve-image-resize');
+  const pointer = (type, x) => new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x });
+  handle.dispatchEvent(pointer('pointerdown', 600));
+  window.dispatchEvent(pointer('pointermove', 340));
+  window.dispatchEvent(pointer('pointerup', 340));
+  assert.equal(changes.at(-1), '| A |\n| --- |\n| ![Photo](photo.jpg?cropResize=340) |\n');
+  el.remove();
+});

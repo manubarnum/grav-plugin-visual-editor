@@ -138,6 +138,8 @@ export default {
   'Shown at {width} px': 'Affichée à {width} px',
   'Width…': 'Largeur…',
   'Alt text & title…': 'Texte alternatif et titre…',
+  'Original': 'Origine',
+  'Alt text…': 'Texte alt.…',
   'Drag to resize': 'Glisser pour redimensionner',
   'This image is only {width} px wide: kept at its original size.': 'Cette image ne fait que {width} px de large : elle garde sa taille d’origine.',
   'No images in this page’s media yet. Upload one below.': 'Aucune image dans les médias de cette page. Envoyez-en une ci-dessous.',

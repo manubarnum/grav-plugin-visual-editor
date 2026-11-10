@@ -188,12 +188,14 @@ export class VisualEditor {
     // Shown while an image is selected; widths become Grav's `?cropResize=` (resized copy, ratio kept).
     this.imageBar = element('div', 've-tablebar ve-imagebar'); this.imageBar.hidden = true;
     this.imageSize = element('span', 've-imagebar-size');
-    [[320, 'Small · 320 px'], [640, 'Medium · 640 px'], [960, 'Large · 960 px'], [null, 'Original size']].forEach(([width, label]) => {
-      this.imageBar.append(this.button(`width-${width || 'original'}`, label, () => this.setImageWidth(width)));
+    // Short texts keep the bar on one line; the full labels are the tooltips.
+    const shortButton = (name, label, short, action) => { const button = this.button(name, label, action, false); button.textContent = t(short); return button; };
+    [[320, 'Small · 320 px', '320 px'], [640, 'Medium · 640 px', '640 px'], [960, 'Large · 960 px', '960 px'], [null, 'Original size', 'Original']].forEach(([width, label, short]) => {
+      this.imageBar.append(shortButton(`width-${width || 'original'}`, label, short, () => this.setImageWidth(width)));
     });
     this.imageBar.append(
-      this.button('width-custom', 'Width…', () => this.imageWidthDialog()),
-      this.button('image-details', 'Alt text & title…', () => this.imageDetailsDialog()),
+      shortButton('width-custom', 'Width…', 'Width…', () => this.imageWidthDialog()),
+      shortButton('image-details', 'Alt text & title…', 'Alt text…', () => this.imageDetailsDialog()),
       this.imageSize,
     );
     this.editorWrap = element('div', 've-editor-wrap'); this.content = element('div', 've-content');
@@ -393,11 +395,12 @@ export class VisualEditor {
       }
       if (name.startsWith('align')) button.setAttribute('aria-pressed', String(alignment === name.slice(5).toLowerCase()));
     });
-    this.tableBar.hidden = !inTable || this.mode === 'source';
     const image = this.mode === 'visual' ? this.selectedImage() : null;
+    // One bar at a time: an image selected in a table gets the image bar, in the table bar's place.
+    this.tableBar.hidden = !inTable || this.mode === 'source' || Boolean(image);
     this.imageBar.hidden = !image;
     if (!this.tableBar.hidden) this.placeFloatingBar(this.tableBar, this.currentTableElement());
-    if (image) this.placeFloatingBar(this.imageBar, this.editor.view.nodeDOM(image.pos));
+    if (image) this.placeFloatingBar(this.imageBar, inTable ? this.currentTableElement() : this.editor.view.nodeDOM(image.pos));
     if (image) {
       const width = imageWidth(image.node.attrs.src);
       this.imageSize.textContent = width ? t('Shown at {width} px', { width }) : t('Original size');

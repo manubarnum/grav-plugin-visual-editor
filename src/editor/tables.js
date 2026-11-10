@@ -83,9 +83,14 @@ export const tableMethods = {
     const line = this.cellLine();
     if (!line || line.from === line.to) return false;
     const bold = this.editor.schema.marks.bold;
+    let text = false;
     let all = true;
-    this.editor.state.doc.nodesBetween(line.from, line.to, (node) => { if (node.isText && !bold.isInSet(node.marks)) all = false; });
-    return all;
+    this.editor.state.doc.nodesBetween(line.from, line.to, (node) => {
+      if (!node.isText) return;
+      text = true;
+      if (!bold.isInSet(node.marks)) all = false;
+    });
+    return text && all;
   },
 
   /**
