@@ -20,7 +20,9 @@ export const dialogMethods = {
       } else input = document.createElement(field.type === 'textarea' ? 'textarea' : 'input');
       if (field.type !== 'textarea' && field.type !== 'select') input.type = field.type || 'text';
       if (field.min) input.min = field.min; if (field.max) input.max = field.max;
-      input.name = field.name; input.required = Boolean(field.required); input.value = field.value ?? '';
+      input.name = field.name; input.required = Boolean(field.required);
+      // A select without an initial value keeps its first option: assigning '' would deselect every option.
+      if (field.type !== 'select' || field.value !== undefined) input.value = field.value ?? '';
       label.append(input); form.append(label);
     });
     const actions = element('div', 've-dialog-actions');

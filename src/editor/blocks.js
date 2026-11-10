@@ -5,15 +5,37 @@ import { shortcodeContainers } from './ui.js';
 import { t } from '../i18n.js';
 
 export const blockMethods = {
+  /**
+   * Insert a GitHub-style alert after the current block (or in place of an empty paragraph), built as
+   * one node: wrapping the selection and patching the title afterwards reused a finished command chain
+   * and stale positions, so nothing was inserted.
+   */
   alertDialog() {
     this.dialog('Insert alert', [
       { name: 'kind', label: 'Type', type: 'select', options: alertKinds.map((kind) => [kind, kind.charAt(0) + kind.slice(1).toLowerCase()]) },
       { name: 'text', label: 'Message', type: 'textarea', value: t('Write something worth noticing.') },
     ], ({ kind, text }) => {
-      const chain = this.editor.chain().focus();
-      chain.setBlockquote().updateAttributes('blockquote', { alert: kind }).run();
-      if (text) chain.insertContent(text).run();
-      this.ensureAlertTitle(kind);
+      if (!alertKinds.includes(kind)) return;
+      const paragraphs = String(text || '').split(/\n+/).map((line) => line.trim()).filter(Boolean);
+      const alert = {
+        type: 'blockquote',
+        attrs: { alert: kind },
+        content: [
+          { type: 'alertTitle', attrs: { kind } },
+          ...(paragraphs.length ? paragraphs : ['']).map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })),
+        ],
+      };
+      const { $from, to } = this.editor.state.selection;
+      // The block to insert after: the nearest one sitting directly in the document or a shortcode block.
+      let depth = $from.depth;
+      while (depth > 1 && !shortcodeContainers.includes($from.node(depth - 1).type.name)) depth -= 1;
+      let target = to;
+      if (depth >= 1) {
+        const block = $from.node(depth);
+        const empty = block.type.name === 'paragraph' && block.content.size === 0;
+        target = empty ? { from: $from.before(depth), to: $from.after(depth) } : $from.after(depth);
+      }
+      this.editor.chain().focus().insertContentAt(target, alert).run();
     });
   },
 
@@ -95,19 +117,6 @@ export const blockMethods = {
 
   /** Unwrap: the block's content stays in place, only the colored frame goes. */
   removeColorBlock(block) { this.unwrapBlock(block); },
-
-  ensureAlertTitle(kind) {
-    const { state } = this.editor;
-    state.doc.descendants((node, pos) => {
-      if (node.type.name !== 'blockquote' || !node.attrs.alert) return;
-      if (node.firstChild?.type.name === 'alertTitle') {
-        if (node.firstChild.attrs.kind !== node.attrs.alert) this.editor.view.dispatch(state.tr.setNodeMarkup(pos + 1, undefined, { kind: node.attrs.alert }));
-      } else {
-        const title = state.schema.nodes.alertTitle.create({ kind: node.attrs.alert });
-        this.editor.view.dispatch(state.tr.insert(pos + 1, title));
-      }
-    });
-  },
 
   rawDialog() {
     this.dialog('Protected HTML or Twig', [

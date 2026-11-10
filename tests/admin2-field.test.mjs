@@ -637,6 +637,46 @@ test('collaboration: other participants show as cursors', async () => {
   assert.deepEqual(one.awareness.getLocalState().user, { name: 'User 1', color: '#3d7eff' });
 });
 
+test('Insert alert adds an alert block with the chosen type and message', () => {
+  const { el, changes } = mount('Intro\n\nOutro\n');
+  const editor = el.editor;
+  const insert = (kind, text) => {
+    editor.alertDialog();
+    editor.dialogElement.querySelector('select[name="kind"]').value = kind;
+    editor.dialogElement.querySelector('textarea[name="text"]').value = text;
+    editor.dialogElement.querySelector('button[type="submit"]').click();
+  };
+  editor.editor.commands.setTextSelection(3); // inside "Intro"
+  insert('WARNING', 'Careful here.');
+  assert.equal(changes.at(-1), 'Intro\n\n> [!WARNING]\n> Careful here.\n\nOutro\n');
+  const alert = el.querySelector('.ProseMirror blockquote.ve-alert-warning');
+  assert.equal(alert?.querySelector('.ve-alert-title')?.textContent, 'Warning');
+
+  insert('TIP', 'One\nTwo');
+  assert.match(changes.at(-1), /> \[!WARNING\]\n> Careful here\.\n\n> \[!TIP\]\n> One\n>\n> Two\n\nOutro\n$/, 'inserted after the current block, one paragraph per line');
+});
+
+test('Insert alert replaces an empty paragraph', () => {
+  const { el, changes } = mount('');
+  el.editor.alertDialog();
+  el.editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.equal(changes.at(-1), '> [!NOTE]\n> Write something worth noticing.\n');
+});
+
+test('dialog selects default to their first option (alert type, HTML/Twig block type)', () => {
+  const { el, changes } = mount('Intro\n');
+  const editor = el.editor;
+  editor.alertDialog();
+  assert.equal(editor.dialogElement.querySelector('select[name="kind"]').value, 'NOTE');
+  editor.closeDialog();
+  editor.editor.commands.setTextSelection(3);
+  editor.rawDialog();
+  assert.equal(editor.dialogElement.querySelector('select[name="kind"]').value, 'html');
+  editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.match(changes.at(-1), /<div class="notice">/);
+  assert.equal(el.querySelector('.ProseMirror .ve-protected-html') !== null, true);
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
