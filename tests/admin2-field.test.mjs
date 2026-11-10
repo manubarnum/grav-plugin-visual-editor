@@ -315,7 +315,8 @@ test('page settings button: background, gradient and effect kept as a hidden com
   assert.equal(changes.at(-1), '<!-- ve-page background="#1d3557" background2="#6a4c93" direction="radial" effect="stars" intensity="strong" -->\n\n# Title\n\nText\n');
   const wrap = editor.editorWrap;
   assert.match(wrap.style.background, /radial-gradient/);
-  assert.equal(wrap.style.getPropertyValue('--ve-text'), '#ffffff');
+  assert.equal(editor.content.style.getPropertyValue('--ve-text'), '#ffffff', 'text color on the content');
+  assert.equal(wrap.style.getPropertyValue('--ve-text'), '', 'not on the area: the floating bars keep the editor colors');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.doesNotMatch(el.querySelector('.ProseMirror').textContent, /ve-page/, 'comment hidden from the visual view');
 
@@ -342,7 +343,7 @@ test('page settings: an existing comment loads without marking the page changed,
   const { el, changes } = mount(markdown);
   assert.equal(changes.length, 0);
   assert.equal(el.value, markdown);
-  assert.equal(el.editor.editorWrap.style.getPropertyValue('--ve-text'), '#1f2329');
+  assert.equal(el.editor.content.style.getPropertyValue('--ve-text'), '#1f2329');
   el.editor.editor.commands.insertContentAt(1, 'New ');
   assert.equal(changes.at(-1), '<!--  ve-page effect="snow"   background="#FDE2E4" -->\n\nNew Text\n', 'the comment is kept as written');
   el.remove();

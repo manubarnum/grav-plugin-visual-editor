@@ -190,11 +190,15 @@ export class VisualEditor {
     this.editorWrap = element('div', 've-editor-wrap'); this.content = element('div', 've-content');
     this.source = element('textarea', 've-source'); this.source.spellcheck = false; this.source.hidden = true;
     this.source.setAttribute('aria-label', t('Markdown source'));
-    this.editorWrap.append(this.content, this.source);
+    // Table and image bars float over the editing area, above what they act on: shown in the flow,
+    // they pushed the text down as the cursor entered a table, so a mouse selection made it jump.
+    this.tableBar.classList.add('ve-floating-bar'); this.imageBar.classList.add('ve-floating-bar');
+    this.editorWrap.append(this.content, this.source, this.tableBar, this.imageBar);
+    this.editorWrap.addEventListener('scroll', () => this.updateToolbar(), { passive: true });
     const footer = element('div', 've-footer');
     this.status = element('span', '', t(messages.saved)); this.count = element('span', 've-count');
     footer.append(this.status, this.count);
-    this.root.append(header, this.toolbar, this.tableBar, this.imageBar, this.editorWrap, footer);
+    this.root.append(header, this.toolbar, this.editorWrap, footer);
     this.host.append(this.root);
   }
 
@@ -364,6 +368,7 @@ export class VisualEditor {
     // Block lookups walk up the document: once per refresh, not once per button.
     const colorBlock = Boolean(this.findColorBlock());
     const alignment = this.currentAlignment();
+    const inTable = this.editor.isActive('table');
     this.toolbar.querySelectorAll('[data-action]').forEach((button) => {
       const name = button.dataset.action;
       const active = { bold: 'bold', italic: 'italic', strike: 'strike', link: 'link', bulletList: 'bulletList', orderedList: 'orderedList', blockquote: 'blockquote', codeBlock: 'codeBlock', highlight: 'highlight', subscript: 'subscript', superscript: 'superscript', keyboard: 'keyboard', citation: 'citation' }[name];
@@ -371,15 +376,44 @@ export class VisualEditor {
       if (name === 'undo') button.disabled = !(this.collaboration ? canSharedUndo(this.editor.state) : this.editor.can().undo());
       if (name === 'redo') button.disabled = !(this.collaboration ? canSharedRedo(this.editor.state) : this.editor.can().redo());
       if (name === 'colorBlock') button.setAttribute('aria-pressed', String(colorBlock));
+      if (name === 'heading') {
+        // A Markdown table cell is one line of text: no heading there (the button says why).
+        button.disabled = inTable;
+        button.title = t(inTable ? 'No heading in a table cell (one line of text in Markdown)' : labels.heading);
+      }
       if (name.startsWith('align')) button.setAttribute('aria-pressed', String(alignment === name.slice(5).toLowerCase()));
     });
-    const inTable = this.editor.isActive('table'); this.tableBar.hidden = !inTable || this.mode === 'source';
+    this.tableBar.hidden = !inTable || this.mode === 'source';
     const image = this.mode === 'visual' ? this.selectedImage() : null;
     this.imageBar.hidden = !image;
+    if (!this.tableBar.hidden) this.placeFloatingBar(this.tableBar, this.currentTableElement());
+    if (image) this.placeFloatingBar(this.imageBar, this.editor.view.nodeDOM(image.pos));
     if (image) {
       const width = imageWidth(image.node.attrs.src);
       this.imageSize.textContent = width ? t('Shown at {width} px', { width }) : t('Original size');
     }
+  }
+
+  /** The table around the cursor, as shown in the page. */
+  currentTableElement() {
+    const { node } = this.editor.view.domAtPos(this.editor.state.selection.from);
+    const at = node.nodeType === 1 ? node : node.parentElement;
+    return at?.closest('.tableWrapper, table') || null;
+  }
+
+  /**
+   * Put a floating bar just above `target` (inside the scrolling editing area), kept in view when the
+   * target's top is scrolled away, never wider than the area.
+   */
+  placeFloatingBar(bar, target) {
+    if (!target?.getBoundingClientRect) return;
+    const wrap = this.editorWrap;
+    const area = wrap.getBoundingClientRect();
+    const box = target.getBoundingClientRect();
+    const above = box.top - area.top + wrap.scrollTop - bar.offsetHeight - 6;
+    bar.style.top = `${Math.max(wrap.scrollTop + 6, above)}px`;
+    const left = box.left - area.left + wrap.scrollLeft;
+    bar.style.left = `${Math.max(8, Math.min(left, wrap.clientWidth - bar.offsetWidth - 8))}px`;
   }
 
   notify(message, error = false) {

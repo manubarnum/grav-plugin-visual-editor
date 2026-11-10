@@ -79,11 +79,16 @@ export const pageMethods = {
     wrap.style.background = background ? (background2 ? gradientCss(direction, background, background2) : background) : '';
     if (background) {
       const text = contrastText(background2 ? mixColors(background, background2) || background : background);
-      wrap.style.setProperty('--ve-text', text);
-      wrap.style.setProperty('--ve-muted', mutedText[text]);
+      // Text colors go to the page content only: the floating table/image bars keep the editor's colors.
+      for (const view of [this.content, this.source]) {
+        view.style.setProperty('--ve-text', text);
+        view.style.setProperty('--ve-muted', mutedText[text]);
+      }
     } else {
-      wrap.style.removeProperty('--ve-text');
-      wrap.style.removeProperty('--ve-muted');
+      for (const view of [this.content, this.source]) {
+        view.style.removeProperty('--ve-text');
+        view.style.removeProperty('--ve-muted');
+      }
     }
     this.toolbar?.querySelector('[data-action="pageSettings"]')?.setAttribute('aria-pressed', String(Boolean(background || this.currentPageSettings().effect)));
   },
