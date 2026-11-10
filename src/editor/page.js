@@ -45,7 +45,10 @@ export const pageMethods = {
       );
     }
     if (pageEffects) {
-      fields.push({ name: 'effect', label: 'Page effect (shown on the site)', type: 'select', options: [['none', 'No effect'], ...effectLabels], value: current.effect || 'none' });
+      fields.push(
+        { name: 'effect', label: 'Page effect (shown on the site)', type: 'select', options: [['none', 'No effect'], ...effectLabels], value: current.effect || 'none' },
+        { name: 'intensity', label: 'Effect intensity', type: 'select', options: [['light', 'Light'], ['normal', 'Normal'], ['strong', 'Strong']], value: current.intensity || 'normal' },
+      );
     }
     this.dialog('Page background and effects', fields, (values) => {
       const pick = (choice, custom) => (choice === 'none' || !choice ? '' : choice === 'custom' ? custom : choice);
@@ -53,6 +56,7 @@ export const pageMethods = {
         ? { background: pick(values.background, values.custom), background2: pick(values.background2, values.custom2), direction: values.direction }
         : { background: current.background, background2: current.background2, direction: current.direction };
       next.effect = pageEffects ? (values.effect === 'none' ? '' : values.effect) : current.effect;
+      next.intensity = pageEffects ? values.intensity : current.intensity;
       this.setPageSettings(next);
     });
   },

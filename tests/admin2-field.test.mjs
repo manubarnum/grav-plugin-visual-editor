@@ -309,8 +309,10 @@ test('page settings button: background, gradient and effect kept as a hidden com
   dialog().querySelector('input[name="custom2"]').value = '#6a4c93';
   dialog().querySelector('select[name="direction"]').value = 'radial';
   dialog().querySelector('select[name="effect"]').value = 'stars';
+  assert.equal(dialog().querySelector('select[name="intensity"]').value, 'normal');
+  dialog().querySelector('select[name="intensity"]').value = 'strong';
   submit();
-  assert.equal(changes.at(-1), '<!-- ve-page background="#1d3557" background2="#6a4c93" direction="radial" effect="stars" -->\n\n# Title\n\nText\n');
+  assert.equal(changes.at(-1), '<!-- ve-page background="#1d3557" background2="#6a4c93" direction="radial" effect="stars" intensity="strong" -->\n\n# Title\n\nText\n');
   const wrap = editor.editorWrap;
   assert.match(wrap.style.background, /radial-gradient/);
   assert.equal(wrap.style.getPropertyValue('--ve-text'), '#ffffff');
@@ -326,6 +328,7 @@ test('page settings button: background, gradient and effect kept as a hidden com
 
   editor.command('pageSettings');
   assert.equal(dialog().querySelector('select[name="effect"]').value, 'stars', 'dialog shows the current settings');
+  assert.equal(dialog().querySelector('select[name="intensity"]').value, 'strong');
   dialog().querySelector('select[name="background"]').value = 'none';
   dialog().querySelector('select[name="effect"]').value = 'none';
   submit();

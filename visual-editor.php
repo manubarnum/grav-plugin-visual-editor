@@ -113,6 +113,7 @@ class VisualEditorPlugin extends Plugin
             'background2' => $values['background2'] ?? '',
             'direction' => $values['direction'] ?? '',
             'effect' => $values['effect'] ?? '',
+            'intensity' => $values['intensity'] ?? '',
         ];
     }
 
@@ -175,12 +176,20 @@ class VisualEditorPlugin extends Plugin
             return;
         }
         $background = $this->config->get('plugins.visual-editor.page_background', true) ? self::safeColor($settings['background']) : null;
-        $this->grav['assets']->addInlineCss(self::pageEffectCss($effect, $background), ['priority' => 5]);
+        $this->grav['assets']->addInlineCss(self::pageEffectCss($effect, $background, $settings['intensity']), ['priority' => 5]);
     }
 
     /** The CSS of one page effect; `$background` (validated) picks particle colors that show on it. */
-    public static function pageEffectCss(array $effect, ?string $background): string
+    /** Effect intensities: frontmatter value => [particle count, size, duration] factors. Anything else is normal. */
+    public const EFFECT_INTENSITIES = [
+        'light' => [0.5, 0.85, 1.5],
+        'normal' => [1, 1, 1],
+        'strong' => [1.6, 1.2, 0.7],
+    ];
+
+    public static function pageEffectCss(array $effect, ?string $background, string $intensity = 'normal'): string
     {
+        [$more, $bigger, $slower] = self::EFFECT_INTENSITIES[$intensity] ?? self::EFFECT_INTENSITIES['normal'];
         // Light background (or none): blue-grey snow and deep gold; dark background: white and pale gold.
         $dark = $background !== null && self::contrastText($background) === '#ffffff';
         $colors = [
@@ -196,10 +205,11 @@ class VisualEditorPlugin extends Plugin
         $css = '';
         foreach ($layers as $pseudo => $layer) {
             $tile = $layer['tile'];
-            $image = self::particleTile($effect['kind'], $tile, $layer['count'], $layer['size'], $colors, $layer['seed']);
+            $size = [$layer['size'][0] * $bigger, $layer['size'][1] * $bigger];
+            $image = self::particleTile($effect['kind'], $tile, (int)round($layer['count'] * $more), $size, $colors, $layer['seed']);
             $animations = [];
             if ($effect['fall']) {
-                $seconds = $effect['kind'] === 'sparkles' ? (int)round($layer['seconds'] * 1.3) : $layer['seconds'];
+                $seconds = (int)round($layer['seconds'] * $slower * ($effect['kind'] === 'sparkles' ? 1.3 : 1));
                 $animations[] = "ve-fx-fall {$seconds}s linear infinite";
             }
             if ($effect['twinkle']) {

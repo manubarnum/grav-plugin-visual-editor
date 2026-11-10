@@ -584,11 +584,13 @@ export function linkMarkdown(content, attrs) {
 
 /** Page effects offered by the page settings (keys of PHP `PAGE_EFFECTS`). */
 export const pageEffects = ['snow', 'snow-still', 'stars', 'stars-still', 'sparkles', 'sparkles-still'];
+/** Effect intensities (keys of PHP `EFFECT_INTENSITIES`); normal is the default and is not written. */
+export const effectIntensities = ['light', 'normal', 'strong'];
 
 const pageColor = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const pageSettingsPattern = /^<!--\s*ve-page\b([^]*?)-->[ \t]*(?:\r?\n(?:[ \t]*\r?\n)?|$)/;
 
-/** Only the valid page settings: { background, background2, direction, effect }, each optional. */
+/** Only the valid page settings: { background, background2, direction, effect, intensity }, each optional. */
 export function cleanPageSettings(settings) {
   const out = {};
   const background = String(settings?.background ?? '').trim();
@@ -602,7 +604,11 @@ export function cleanPageSettings(settings) {
     }
   }
   const effect = String(settings?.effect ?? '').trim();
-  if (pageEffects.includes(effect)) out.effect = effect;
+  if (pageEffects.includes(effect)) {
+    out.effect = effect;
+    const intensity = String(settings?.intensity ?? '').trim();
+    if (effectIntensities.includes(intensity) && intensity !== 'normal') out.intensity = intensity;
+  }
   return out;
 }
 
@@ -623,6 +629,6 @@ export function splitPageSettings(markdown) {
 /** The leading comment for these settings ('' when there is nothing to keep). */
 export function pageSettingsPrefix(settings) {
   const clean = cleanPageSettings(settings);
-  const attributes = ['background', 'background2', 'direction', 'effect'].filter((key) => clean[key]).map((key) => `${key}="${clean[key]}"`);
+  const attributes = ['background', 'background2', 'direction', 'effect', 'intensity'].filter((key) => clean[key]).map((key) => `${key}="${clean[key]}"`);
   return attributes.length ? `<!-- ve-page ${attributes.join(' ')} -->\n\n` : '';
 }

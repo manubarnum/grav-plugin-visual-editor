@@ -196,6 +196,11 @@ test('page effects: CSS-only overlay that never blocks clicks, still for reduced
     ok(str_contains($sparkles, 've-fx-fall') && str_contains($sparkles, 've-fx-twinkle'), 'sparkles fall and twinkle');
     ok(str_contains($css(['page_effect' => 'snow', 'background_color' => '#1d3557']), 'rgba(255,255,255,'), 'white snow on a dark page');
     ok(str_contains($css(['page_effect' => 'snow', 'background_color' => '#fde2e4']), 'rgba(122,146,180,'), 'blue-grey snow on a light page');
+    $count = fn(string $intensity) => substr_count(VisualEditorPlugin::pageEffectCss(VisualEditorPlugin::PAGE_EFFECTS['snow'], null, $intensity), '%3Ccircle');
+    ok($count('light') < $count('normal') && $count('normal') < $count('strong'), 'intensity changes the number of particles');
+    same($count('normal'), $count('fireworks'), 'unknown intensity: normal');
+    $fall = fn(string $intensity) => preg_match('/ve-fx-fall (\d+)s/', VisualEditorPlugin::pageEffectCss(VisualEditorPlugin::PAGE_EFFECTS['snow'], null, $intensity), $m) ? (int)$m[1] : 0;
+    ok($fall('strong') < $fall('normal') && $fall('normal') < $fall('light'), 'stronger falls faster');
     same('', $css([]), 'no effect: no css');
     same('', $css(['page_effect' => 'fireworks;}body{x']), 'unknown effect ignored');
     same('', $css(['page_effect' => 'snow'], ['plugins.visual-editor.page_effects' => false]), 'option off');
@@ -203,11 +208,11 @@ test('page effects: CSS-only overlay that never blocks clicks, still for reduced
 
 test('page settings: the comment written by the editor wins over the former frontmatter fields', function () {
     $settings = fn(array $header, string $raw) => VisualEditorPlugin::pageSettings(new Page($header, $raw));
-    same(['background' => '#1d3557', 'background2' => '#6a4c93', 'direction' => 'radial', 'effect' => 'stars'],
-        $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "<!-- ve-page background=\"#1d3557\" background2=\"#6a4c93\" direction=\"radial\" effect=\"stars\" -->\n\nText\n"));
-    same(['background' => '', 'background2' => '', 'direction' => '', 'effect' => ''],
+    same(['background' => '#1d3557', 'background2' => '#6a4c93', 'direction' => 'radial', 'effect' => 'stars', 'intensity' => 'strong'],
+        $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "<!-- ve-page background=\"#1d3557\" background2=\"#6a4c93\" direction=\"radial\" effect=\"stars\" intensity=\"strong\" -->\n\nText\n"));
+    same(['background' => '', 'background2' => '', 'direction' => '', 'effect' => '', 'intensity' => ''],
         $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "<!-- ve-page -->\n\nText\n"), 'an empty comment turns the former fields off');
-    same(['background' => '#fff', 'background2' => '', 'direction' => '', 'effect' => 'snow'],
+    same(['background' => '#fff', 'background2' => '', 'direction' => '', 'effect' => 'snow', 'intensity' => ''],
         $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "Text\n<!-- ve-page effect=\"stars\" -->\n"), 'only a comment opening the content counts');
 
     $assets = new Assets();

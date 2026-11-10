@@ -5,7 +5,7 @@
     * Collaborative editing with Admin2 (Sync plugin): shared document, participants' cursors, shared undo history; uses Admin2's Yjs instance (none bundled)
     * Interface in French when Admin2 is in French
     * Gradients: page background and colored blocks can blend two colors (top to bottom, left to right, diagonal or from the center), text stays readable
-    * Page effect: falling snow, twinkling stars or falling sparkles over a page, or the same still; CSS only, still for visitors who prefer reduced motion (`page_effects` option)
+    * Page effect: falling snow, twinkling stars or falling sparkles over a page, or the same still, light, normal or strong; CSS only, still for visitors who prefer reduced motion (`page_effects` option)
     * Page background and effect are set with the ✦ toolbar button (also in distraction-free mode), kept as a `<!-- ve-page … -->` comment opening the content; the former fields under the editor are gone (their values still apply until the button is used)
 1. [](#improved)
     * The editor footer describes how edits are saved in Admin2
