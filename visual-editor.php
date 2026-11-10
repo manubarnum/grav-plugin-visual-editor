@@ -204,39 +204,33 @@ class VisualEditorPlugin extends Plugin
     /** The CSS of one page effect; `$background` (validated) picks particle colors that show on it. */
     public static function pageEffectCss(array $effect, ?string $background): string
     {
-        // Light background (or unknown): soft blue-grey snow and deeper gold; dark background: white and pale gold.
+        // Light background (or none): blue-grey snow and deep gold; dark background: white and pale gold.
         $dark = $background !== null && self::contrastText($background) === '#ffffff';
         $colors = [
-            'snow' => $dark ? ['rgba(255,255,255,.9)', 'rgba(255,255,255,.7)'] : ['rgba(122,146,180,.75)', 'rgba(122,146,180,.55)'],
-            'stars' => $dark ? ['rgba(255,236,170,.95)', 'rgba(255,255,255,.85)'] : ['rgba(212,160,23,.85)', 'rgba(232,160,190,.8)'],
-            'sparkles' => $dark ? ['rgba(255,214,120,.95)', 'rgba(255,190,230,.9)'] : ['rgba(212,160,23,.85)', 'rgba(219,112,160,.8)'],
+            'snow' => $dark ? ['rgba(255,255,255,.95)', 'rgba(255,255,255,.75)'] : ['rgba(122,146,180,.9)', 'rgba(122,146,180,.7)'],
+            'stars' => $dark ? ['rgba(255,236,170,.95)', 'rgba(255,255,255,.9)'] : ['rgba(212,160,23,.9)', 'rgba(219,112,160,.85)'],
+            'sparkles' => $dark ? ['rgba(255,214,120,.95)', 'rgba(255,190,230,.9)'] : ['rgba(212,160,23,.9)', 'rgba(219,112,160,.85)'],
         ][$effect['kind']];
-        // Fixed dot layouts per tile (no randomness: the same page always looks the same).
+        // Far layer (before): many small particles, slow; near layer (after): fewer, bigger, faster.
         $layers = [
-            'before' => ['tile' => 260, 'radius' => $effect['kind'] === 'snow' ? 1.6 : 1.1, 'color' => $colors[1], 'seconds' => 22,
-                'dots' => [[30, 40], [120, 15], [210, 80], [70, 150], [180, 190], [240, 230], [15, 220], [140, 110]]],
-            'after' => ['tile' => 380, 'radius' => $effect['kind'] === 'snow' ? 3.2 : 1.8, 'color' => $colors[0], 'seconds' => 13,
-                'dots' => [[60, 70], [250, 30], [330, 160], [150, 250], [20, 320], [290, 340]]],
+            'before' => ['tile' => 320, 'count' => 18, 'size' => [2, 4], 'seconds' => 24, 'seed' => 7],
+            'after' => ['tile' => 460, 'count' => 12, 'size' => [4, 8], 'seconds' => 14, 'seed' => 3],
         ];
         $css = '';
         foreach ($layers as $pseudo => $layer) {
-            $images = [];
-            foreach ($layer['dots'] as [$x, $y]) {
-                $edge = $layer['radius'] + 1;
-                $images[] = "radial-gradient(circle at {$x}px {$y}px,{$layer['color']} 0 {$layer['radius']}px,transparent {$edge}px)";
-            }
+            $tile = $layer['tile'];
+            $image = self::particleTile($effect['kind'], $tile, $layer['count'], $layer['size'], $colors, $layer['seed']);
             $animations = [];
             if ($effect['fall']) {
                 $seconds = $effect['kind'] === 'sparkles' ? (int)round($layer['seconds'] * 1.6) : $layer['seconds'];
                 $animations[] = "ve-fx-fall {$seconds}s linear infinite";
             }
             if ($effect['twinkle']) {
-                $animations[] = 've-fx-twinkle ' . ($pseudo === 'before' ? '3.2s' : '4.6s') . ' ease-in-out infinite alternate';
+                $animations[] = 've-fx-twinkle ' . ($pseudo === 'before' ? '2.6s' : '3.8s') . ' ease-in-out infinite alternate';
             }
-            $tile = $layer['tile'];
             $css .= "body::{$pseudo}{content:\"\";position:fixed;left:0;right:0;top:-{$tile}px;height:calc(100% + {$tile}px);"
                 . "pointer-events:none;z-index:2147483000;--ve-fx-tile:{$tile}px;"
-                . 'background-image:' . implode(',', $images) . ";background-size:{$tile}px {$tile}px;"
+                . "background-image:url(\"{$image}\");background-size:{$tile}px {$tile}px;"
                 . ($animations ? 'animation:' . implode(',', $animations) . ';will-change:' . ($effect['fall'] ? 'transform' : 'opacity') : '')
                 . '}';
         }
@@ -244,10 +238,46 @@ class VisualEditorPlugin extends Plugin
             $css .= '@keyframes ve-fx-fall{from{transform:translateY(0)}to{transform:translateY(var(--ve-fx-tile))}}';
         }
         if ($effect['twinkle']) {
-            $css .= '@keyframes ve-fx-twinkle{from{opacity:.35}to{opacity:1}}';
+            $css .= '@keyframes ve-fx-twinkle{from{opacity:.3}to{opacity:1}}';
         }
 
         return $css . '@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}';
+    }
+
+    /**
+     * One square SVG tile (data URI) of particles at fixed pseudo-random places (the same page always
+     * looks the same): soft glowing dots for snow, four-pointed stars for stars, a mix for sparkles.
+     */
+    private static function particleTile(string $kind, int $tile, int $count, array $size, array $colors, int $seed): string
+    {
+        $next = static function () use (&$seed): float {
+            $seed = ($seed * 1103515245 + 12345) % 2147483648;
+            return $seed / 2147483648;
+        };
+        $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='{$tile}' height='{$tile}'>"
+            . "<defs><radialGradient id='a'><stop offset='0' stop-color='{$colors[0]}'/><stop offset='.45' stop-color='{$colors[0]}'/>"
+            . "<stop offset='1' stop-color='{$colors[0]}' stop-opacity='0'/></radialGradient>"
+            . "<radialGradient id='b'><stop offset='0' stop-color='{$colors[1]}'/><stop offset='.45' stop-color='{$colors[1]}'/>"
+            . "<stop offset='1' stop-color='{$colors[1]}' stop-opacity='0'/></radialGradient></defs>";
+        for ($i = 0; $i < $count; $i++) {
+            $x = round(8 + $next() * ($tile - 16), 1);
+            $y = round(8 + $next() * ($tile - 16), 1);
+            $r = round(($size[0] + $next() * ($size[1] - $size[0])) * ($kind === 'snow' ? 1.3 : 1), 1);
+            $second = $i % 3 === 2;
+            $star = $kind === 'stars' ? $i % 4 !== 3 : ($kind === 'sparkles' && $i % 2 === 0);
+            if ($star) {
+                // Four-pointed star: points at r * 2.2, pinched toward the center.
+                $s = round($r * 2.2, 1);
+                $fill = $colors[$second ? 1 : 0];
+                $svg .= "<path fill='{$fill}' d='M{$x} " . ($y - $s) . "Q{$x} {$y} " . ($x + $s) . " {$y}Q{$x} {$y} {$x} " . ($y + $s)
+                    . "Q{$x} {$y} " . ($x - $s) . " {$y}Q{$x} {$y} {$x} " . ($y - $s) . "Z'/>";
+            } else {
+                $svg .= "<circle cx='{$x}' cy='{$y}' r='{$r}' fill='url(%23" . ($second ? 'b' : 'a') . ")'/>";
+            }
+        }
+        $svg .= '</svg>';
+
+        return 'data:image/svg+xml,' . strtr($svg, ['<' => '%3C', '>' => '%3E', '#' => '%23']);
     }
 
     /**
