@@ -317,6 +317,7 @@ test('page settings button: background, gradient and effect kept as a hidden com
   assert.match(wrap.style.background, /radial-gradient/);
   assert.equal(editor.content.style.getPropertyValue('--ve-text'), '#ffffff', 'text color on the content');
   assert.equal(wrap.style.getPropertyValue('--ve-text'), '', 'not on the area: the floating bars keep the editor colors');
+  assert.equal(editor.source.style.getPropertyValue('--ve-text'), '', 'nor on the source view (white text on its white background)');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.doesNotMatch(el.querySelector('.ProseMirror').textContent, /ve-page/, 'comment hidden from the visual view');
 

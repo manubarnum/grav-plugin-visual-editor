@@ -79,13 +79,14 @@ export const pageMethods = {
     wrap.style.background = background ? (background2 ? gradientCss(direction, background, background2) : background) : '';
     if (background) {
       const text = contrastText(background2 ? mixColors(background, background2) || background : background);
-      // Text colors go to the page content only: the floating table/image bars keep the editor's colors.
-      for (const view of [this.content, this.source]) {
+      // Text colors go to the visual content only: the floating bars and the source view (opaque,
+      // in the editor's own colors) keep the editor's text color, or white text sat on a white source.
+      for (const view of [this.content]) {
         view.style.setProperty('--ve-text', text);
         view.style.setProperty('--ve-muted', mutedText[text]);
       }
     } else {
-      for (const view of [this.content, this.source]) {
+      for (const view of [this.content]) {
         view.style.removeProperty('--ve-text');
         view.style.removeProperty('--ve-muted');
       }

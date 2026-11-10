@@ -11,6 +11,7 @@
     * Table cells: headings and several paragraphs were saved as `## text` and glued paragraphs; a cell now holds text only, Enter adds a line break (`<br>`), pasted headings or lists become text, and in a table the heading button makes a cell subheading: the current line in bold (`**Subheading**<br>Text`)
     * Images in table cells (broken by the one-line cells above: lifted out of the table, lost inside a table style block) are inline images in their cell again; a photo dragged into a cell, or inserted/uploaded with the cursor in a cell, goes in the cell; the image bar works on them
     * Selecting text near a table made the editing area jump: the table and image bars now float above the table or image instead of pushing the text down (their text no longer takes the page background's text color); the table bar is one compact line with tooltips, in a space kept above each table in the editor, so it never hides the first row
+    * Source view looked empty on a page with a dark background: the page's white text color was applied to the source view's white background; the source view now keeps the editor's colors
 1. [](#improved)
     * Toolbar in five groups (history, text, blocks, table and alignment, image and colors) with drawn SVG icons of one size instead of text symbols
     * Toolbar buttons are chosen with one checkbox each in the plugin settings (the former comma-separated list still works); ✦ and ⋯ can be hidden too
