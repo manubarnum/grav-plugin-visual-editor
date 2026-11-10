@@ -677,6 +677,41 @@ test('dialog selects default to their first option (alert type, HTML/Twig block 
   assert.equal(el.querySelector('.ProseMirror .ve-protected-html') !== null, true);
 });
 
+test('the block handle drags the current block to another place', () => {
+  const { el, changes } = mount('First\n\nSecond\n\nThird\n');
+  const editor = el.editor;
+  const view = editor.editor.view;
+  const handle = el.querySelector('.ve-drag-handle');
+  assert.ok(handle && handle.draggable, 'one handle, outside the document, draggable');
+  assert.equal(view.dom.contains(handle), false);
+
+  editor.editor.commands.setTextSelection(3); // in "First"
+  assert.equal(handle.hidden, false);
+  handle.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
+  assert.equal(view.state.selection.node?.textContent, 'First', 'pressing the handle selects its block');
+  assert.equal(handle.isConnected && !handle.hidden, true, 'the handle stays in place while pressed');
+
+  const data = {};
+  const dataTransfer = { files: [], effectAllowed: '', setData: (type, value) => { data[type] = value; }, getData: (type) => data[type] || '', clearData() {}, setDragImage() {} };
+  const start = new window.Event('dragstart', { bubbles: true, cancelable: true });
+  start.dataTransfer = dataTransfer;
+  handle.dispatchEvent(start);
+  assert.equal(start.defaultPrevented, false);
+  assert.equal(view.dragging?.slice.content.firstChild.textContent, 'First');
+  assert.equal(data['text/plain'], 'First');
+
+  // Drop at the end of the document (jsdom has no layout: give ProseMirror the position).
+  view.posAtCoords = () => ({ pos: view.state.doc.content.size, inside: -1 });
+  const drop = new window.Event('drop', { bubbles: true, cancelable: true });
+  drop.dataTransfer = dataTransfer;
+  view.dom.dispatchEvent(drop);
+  assert.equal(changes.at(-1), 'Second\n\nThird\n\nFirst\n');
+  handle.dispatchEvent(new window.Event('dragend', { bubbles: true }));
+
+  el.remove();
+  assert.equal(handle.isConnected, false, 'removed with the editor');
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');

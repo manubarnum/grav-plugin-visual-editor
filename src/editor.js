@@ -61,7 +61,6 @@ export class VisualEditor {
       onUpdate: () => this.sync(),
       // Fires for content and selection changes alike (a separate onSelectionUpdate doubled the work).
       onTransaction: () => this.updateToolbar(),
-      onCreate: () => { this.content.querySelector('.ProseMirror')._veView = this.editor.view; },
     });
     // Joining a session shows the shared document, which may differ from the form's value.
     if (collaboration) this.markdown = documentToMarkdown(this.editor.state.doc, this.markdownStyle);
@@ -380,9 +379,6 @@ export class VisualEditor {
 
   bindEvents() {
     this.source.addEventListener('input', () => this.sync());
-    this.root.addEventListener('visual-editor-select-block', (event) => {
-      this.editor.commands.setNodeSelection(event.detail.pos);
-    });
     document.addEventListener('keydown', this.onKeydown);
     const registry = window.GravVisualEditorShortcodes;
     if (!Array.isArray(registry)) window.GravVisualEditorShortcodes = [];

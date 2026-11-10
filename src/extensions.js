@@ -1,6 +1,5 @@
 import { Node, Mark, mergeAttributes, Extension } from '@tiptap/core';
 import { Plugin, PluginKey, NodeSelection } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { CellSelection } from '@tiptap/pm/tables';
 import StarterKit from '@tiptap/starter-kit';
 import ListItem from '@tiptap/extension-list-item';
@@ -355,53 +354,72 @@ const BlockDrag = Extension.create({
 });
 
 /** ProseMirror decorations supply native block dragging without moving DOM nodes manually. */
+/**
+ * One drag handle, placed beside the top-level block that holds the cursor. It lives next to the
+ * document (in the editor's content box), not inside it: as a decoration it was rebuilt on every
+ * selection change and removed the moment it was pressed, so a drag could never start.
+ * Dragging sets a node selection and `view.dragging`; ProseMirror's own drop handling moves the block.
+ */
 export function blockHandlePlugin() {
-  const key = new PluginKey('visualEditorBlockHandle');
   return new Plugin({
-    key,
-    state: { init: () => ({ pos: null }), apply(tr, old) { return tr.docChanged && old.pos !== null ? { pos: tr.mapping.map(old.pos) } : old; } },
-    props: {
-      decorations(state) {
-        if (state.selection instanceof CellSelection) return DecorationSet.empty;
-        const $pos = state.selection.$anchor;
-        if ($pos.depth < 1) return DecorationSet.empty;
-        let depth = $pos.depth;
-        while (depth > 1 && ['listItem', 'blockquote', 'tableRow', 'tableCell', 'tableHeader'].includes($pos.node(depth).type.name)) depth--;
-        const pos = $pos.before(depth);
-        const node = $pos.node(depth);
-        const widget = document.createElement('button');
-        widget.type = 'button'; widget.className = 've-drag-handle'; widget.title = 'Drag to reorder this block';
-        widget.setAttribute('aria-label', t('Drag to reorder this block')); widget.textContent = '⠿';
-        widget.addEventListener('click', () => {
-          widget.dispatchEvent(new CustomEvent('visual-editor-select-block', { bubbles: true, detail: { pos } }));
-        });
-        widget.addEventListener('mousedown', () => {
-          widget.draggable = true;
-          const view = widget.closest('.ProseMirror')?._veView;
-          if (view) view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
-        });
-        widget.addEventListener('dragstart', (event) => {
-          const view = widget.closest('.ProseMirror')?._veView;
-          if (!view) { event.preventDefault(); return; }
-          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
-          view.dragging = { slice: view.state.doc.slice(pos, pos + node.nodeSize), move: true };
-          if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', node.textContent || node.type.name);
-            const rect = node.type.name === 'protectedBlock' ? widget.parentElement : null;
-            if (rect) event.dataTransfer.setDragImage(rect, 16, 16);
-          }
-        });
-        return DecorationSet.create(state.doc, [Decoration.widget(pos, widget, { side: -1, key: 'block-handle' })]);
-      },
-      handleDOMEvents: {
-        mousedown(view, event) {
-          if (!event.target.closest('.ve-drag-handle')) return false;
-          const pos = view.posAtDOM(event.target, 0);
-          view.dom._veView = view;
-          return false;
-        },
-      },
+    key: new PluginKey('visualEditorBlockHandle'),
+    view(view) {
+      // A div, not a <button>: Firefox never starts a drag from a button.
+      const handle = document.createElement('div');
+      handle.setAttribute('role', 'button');
+      handle.className = 've-drag-handle';
+      handle.draggable = true;
+      handle.hidden = true;
+      handle.title = t('Drag to reorder this block');
+      handle.setAttribute('aria-label', handle.title);
+      handle.textContent = '⠿';
+      const box = view.dom.parentNode;
+      box?.append(handle);
+      let pos = null;
+
+      const place = () => {
+        const { selection } = view.state;
+        pos = null;
+        if (view.editable && !(selection instanceof CellSelection)) {
+          if (selection instanceof NodeSelection && selection.$from.depth === 0) pos = selection.from;
+          else if (selection.$anchor.depth >= 1) pos = selection.$anchor.before(1);
+        }
+        const block = pos === null ? null : view.nodeDOM(pos);
+        handle.hidden = !(block && block.nodeType === 1 && box);
+        if (handle.hidden) return;
+        const origin = box.getBoundingClientRect();
+        handle.style.top = `${block.getBoundingClientRect().top - origin.top}px`;
+        handle.style.left = `${view.dom.getBoundingClientRect().left - origin.left - 29}px`;
+      };
+      const selectBlock = () => {
+        if (pos === null || !view.state.doc.nodeAt(pos)) return null;
+        const selection = NodeSelection.create(view.state.doc, pos);
+        if (!view.state.selection.eq(selection)) view.dispatch(view.state.tr.setSelection(selection));
+        return selection;
+      };
+
+      handle.addEventListener('mousedown', () => { selectBlock(); });
+      handle.addEventListener('dragstart', (event) => {
+        const selection = selectBlock();
+        if (!selection || !event.dataTransfer) { event.preventDefault(); return; }
+        const slice = selection.content();
+        const { dom, text } = view.serializeForClipboard(slice);
+        event.dataTransfer.clearData();
+        event.dataTransfer.setData('text/html', dom.innerHTML);
+        event.dataTransfer.setData('text/plain', text);
+        event.dataTransfer.effectAllowed = 'copyMove';
+        const block = view.nodeDOM(selection.from);
+        if (block && block.nodeType === 1) event.dataTransfer.setDragImage(block, 0, 0);
+        view.dragging = { slice, move: true, node: selection };
+      });
+      // ProseMirror clears view.dragging on a dragend it sees; this one fires outside the document.
+      handle.addEventListener('dragend', () => {
+        const dragging = view.dragging;
+        window.setTimeout(() => { if (view.dragging === dragging) view.dragging = null; }, 50);
+      });
+
+      place();
+      return { update: place, destroy: () => handle.remove() };
     },
   });
 }
