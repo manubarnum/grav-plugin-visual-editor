@@ -214,7 +214,8 @@ export function addMediaAttributes(html, pageMediaUrl = '') {
 }
 
 export function tableCellToMarkdown(node) {
-  let text = inlineChildren(node).trim().replace(/\n+/g, '<br>');
+  // One line per cell: each paragraph's line breaks and the paragraphs themselves become <br>.
+  let text = childrenOf(node).map((block) => inlineChildren(block).trim()).filter(Boolean).join('\n').replace(/[ \t]*\\?\n+/g, '<br>');
   text = text.replace(/\|/g, '\\|');
   if (node.attrs.colspan > 1 || node.attrs.rowspan > 1) {
     return `<${node.type.name === 'tableHeader' ? 'th' : 'td'} colspan="${node.attrs.colspan}" rowspan="${node.attrs.rowspan}">${text}</${node.type.name === 'tableHeader' ? 'th' : 'td'}>`;
@@ -631,4 +632,24 @@ export function pageSettingsPrefix(settings) {
   const clean = cleanPageSettings(settings);
   const attributes = ['background', 'background2', 'direction', 'effect', 'intensity'].filter((key) => clean[key]).map((key) => `${key}="${clean[key]}"`);
   return attributes.length ? `<!-- ve-page ${attributes.join(' ')} -->\n\n` : '';
+}
+
+/**
+ * Pasted HTML: a Markdown table cell holds inline text only, so blocks inside a cell (headings, lists,
+ * quotes, code) become plain paragraphs instead of breaking the table apart.
+ */
+export function flattenTableCells(html) {
+  if (!/<t[dh][\s>]/i.test(String(html))) return html;
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('td, th').forEach((cell) => {
+    cell.querySelectorAll('h1, h2, h3, h4, h5, h6, li, pre').forEach((block) => {
+      const paragraph = document.createElement('p');
+      if (block.tagName === 'PRE') paragraph.textContent = block.textContent;
+      else paragraph.append(...block.childNodes);
+      block.replaceWith(paragraph);
+    });
+    cell.querySelectorAll('ul, ol, blockquote').forEach((wrapper) => wrapper.replaceWith(...wrapper.childNodes));
+  });
+  return template.innerHTML;
 }

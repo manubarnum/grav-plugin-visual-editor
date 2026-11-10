@@ -443,8 +443,10 @@ const alignAttribute = {
     renderHTML: (attributes) => (attributes.align ? { style: `text-align:${attributes.align}` } : {}),
   },
 };
-const AlignedTableHeader = TableHeader.extend({ addAttributes() { return { ...this.parent?.(), ...alignAttribute }; } });
-const AlignedTableCell = TableCell.extend({ addAttributes() { return { ...this.parent?.(), ...alignAttribute }; } });
+// A Markdown table cell is one line of inline text: cells hold paragraphs only (a heading, list or quote
+// pasted in becomes text), and paragraphs are written joined by <br>.
+const AlignedTableHeader = TableHeader.extend({ content: 'paragraph+', addAttributes() { return { ...this.parent?.(), ...alignAttribute }; } });
+const AlignedTableCell = TableCell.extend({ content: 'paragraph+', addAttributes() { return { ...this.parent?.(), ...alignAttribute }; } });
 
 /**
  * Markdown allows any block first in a list item (`- > quote`, `- ```code`). With TipTap's default

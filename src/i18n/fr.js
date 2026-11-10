@@ -181,6 +181,7 @@ export default {
   'Current color ({color})': 'Couleur actuelle ({color})',
   'Page effect (shown on the site)': 'Effet sur la page (visible sur le site)',
   'No effect': 'Aucun effet',
+  'A table cell holds one line of text in Markdown: no heading there. Use bold, or a line break (Enter).': 'En Markdown, une cellule de tableau ne contient qu’une ligne de texte : pas de titre possible. Utilisez le gras, ou un retour à la ligne (Entrée).',
   'Effect intensity': 'Intensité de l’effet',
   'Light': 'Léger',
   'Normal': 'Normal',

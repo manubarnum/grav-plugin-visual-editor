@@ -891,3 +891,18 @@ test('preview HTML is sanitized before display', async () => {
   holder.append(sanitizePreview('<p onclick="x()">Ok <a href="javascript:alert(1)">l</a></p><script>bad()</script><iframe src="https://x"></iframe>'));
   assert.equal(holder.innerHTML, '<p>Ok <a>l</a></p>');
 });
+
+test('table cells: Enter makes a line break, the heading button explains instead of breaking the cell', () => {
+  const { el, changes } = mount('| A | B |\n| --- | --- |\n| one | x |\n');
+  const editor = el.editor;
+  let cell = 0;
+  editor.editor.state.doc.descendants((node, pos) => { if (!cell && node.isText && node.text === 'one') cell = pos + 3; });
+  editor.editor.commands.setTextSelection(cell);
+  editor.editor.commands.splitBlock();
+  editor.editor.commands.insertContent('two');
+  assert.equal(changes.at(-1), '| A | B |\n| --- | --- |\n| one<br>two | x |\n');
+  editor.command('heading');
+  assert.ok(!editor.dialogElement, 'no heading dialog in a table');
+  assert.match(editor.status.textContent, /une ligne de texte|one line of text/);
+  el.remove();
+});

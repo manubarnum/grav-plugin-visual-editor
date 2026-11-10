@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { documentToMarkdown, markdownToHtml } from '../src/extensions.js';
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions } from '../src/extensions.js';
-import { normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth, detectMarkdownStyle, colorBlockTag, gradientFromOpen } from '../src/markdown.js';
+import { flattenTableCells, normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth, detectMarkdownStyle, colorBlockTag, gradientFromOpen } from '../src/markdown.js';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://example.test/admin/pages/home' });
 global.window = dom.window;
@@ -260,4 +260,16 @@ test('colored block gradients: written in the shortcode style, read back, round-
   const source = `${tag}\n\nFairy **text**.\n\n[/div]\n`;
   assert.match(markdownToHtml(source), /data-ve-block/);
   assert.equal(roundTrip(source), source);
+});
+
+test('table cells stay one line: paragraphs and line breaks become <br>, pasted headings and lists become text', () => {
+  const source = '| A | B |\n| --- | --- |\n| one<br>two | x |\n';
+  assert.equal(roundTrip(source), source, 'a <br> in a cell round-trips');
+  const editor = new Editor({
+    element: document.createElement('div'), extensions,
+    content: flattenTableCells('<table><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><h2>Title</h2><p>First</p><p>Second</p></td><td><ul><li><p>item</p></li></ul></td></tr></table>'),
+  });
+  const markdown = documentToMarkdown(editor.state.doc);
+  editor.destroy();
+  assert.equal(markdown, '| A | B |\n| --- | --- |\n| Title<br>First<br>Second | item |\n');
 });

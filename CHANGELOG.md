@@ -7,6 +7,8 @@
     * Gradients: page background and colored blocks can blend two colors (top to bottom, left to right, diagonal or from the center), text stays readable
     * Page effect: falling snow, twinkling stars or falling sparkles over a page, or the same still, light, normal or strong; CSS only, still for visitors who prefer reduced motion (`page_effects` option)
     * Page background and effect are set with the ✦ toolbar button (also in distraction-free mode), kept as a `<!-- ve-page … -->` comment opening the content; the former fields under the editor are gone (their values still apply until the button is used)
+1. [](#bugfix)
+    * Table cells: headings and several paragraphs were saved as `## text` and glued paragraphs; a cell now holds text only, Enter adds a line break (`<br>`), pasted headings or lists become text, and the heading button explains why it is not available in a table
 1. [](#improved)
     * Toolbar in five groups (history, text, blocks, table and alignment, image and colors) with drawn SVG icons of one size instead of text symbols
     * Toolbar buttons are chosen with one checkbox each in the plugin settings (the former comma-separated list still works); ✦ and ⋯ can be hidden too

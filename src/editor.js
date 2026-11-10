@@ -1,6 +1,6 @@
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { detectMarkdownStyle, escapeHtml, imageWidth, splitPageSettings } from './markdown.js';
+import { detectMarkdownStyle, escapeHtml, flattenTableCells, imageWidth, splitPageSettings } from './markdown.js';
 import { defaults, element, iconSvg, icons, labels, messages, toolbarGroups } from './editor/ui.js';
 import { detectLocale, setLocale, t } from './i18n.js';
 import { canSharedRedo, canSharedUndo, collaborationExtension, sharedRedo, sharedUndo, startCollaboration } from './collab.js';
@@ -60,7 +60,7 @@ export class VisualEditor {
         attributes: { 'aria-label': 'Visual Markdown editor', role: 'textbox', 'aria-multiline': 'true', spellcheck: 'true' },
         handleDrop: (view, event, slice, moved) => this.dropFiles(event, moved),
         handlePaste: (view, event) => this.pasteFiles(event),
-        transformPastedHTML: (html) => html,
+        transformPastedHTML: (html) => flattenTableCells(html),
       },
       onUpdate: () => this.sync(),
       // Fires for content and selection changes alike (a separate onSelectionUpdate doubled the work).
@@ -251,6 +251,7 @@ export class VisualEditor {
   }
 
   heading() {
+    if (this.editor.isActive('table')) return this.notify('A table cell holds one line of text in Markdown: no heading there. Use bold, or a line break (Enter).', true);
     this.dialog('Text style', [
       { name: 'style', label: 'Style', type: 'select', options: [['paragraph', 'Paragraph'], [1, 'Heading 1'], [2, 'Heading 2'], [3, 'Heading 3'], [4, 'Heading 4'], [5, 'Heading 5'], [6, 'Heading 6']], value: this.editor.isActive('heading') ? this.editor.getAttributes('heading').level : 'paragraph' },
     ], ({ style }) => {
