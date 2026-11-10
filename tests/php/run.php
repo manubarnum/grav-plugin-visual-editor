@@ -58,7 +58,7 @@ function names(array $fields): array { return array_map(fn($field) => $field['na
 
 test('site default: the content field becomes the visual editor, with its client config', function () {
     $tab = contentTab(resolve(plugin(['plugins.visual-editor.toolbar' => 'bold, italic'])));
-    same(['header.title:text', 'content:visual-editor', 'header.background_color:colorpicker', 'header.media_order:pagemedia'], names($tab));
+    same(['header.title:text', 'content:visual-editor', 'header.background_color:colorpicker', 'header.background_color_2:colorpicker', 'header.background_direction:select', 'header.media_order:pagemedia'], names($tab));
     same(['bold', 'italic'], $tab[1]['visual_editor']['toolbar']);
     same(false, $tab[1]['visual_editor']['plainTables']);
 });
@@ -83,8 +83,8 @@ test('the page background field never overwrites a sibling and is not duplicated
     $plugin = plugin();
     $once = resolve($plugin);
     $twice = resolve($plugin, '', 'page', $once);
-    same(4, count(contentTab($twice)));
-    same('header.media_order', contentTab($twice)[3]['name']);
+    same(6, count(contentTab($twice)));
+    same('header.media_order', contentTab($twice)[5]['name']);
 });
 
 test('fields added to the page form follow the user\'s Admin2 language', function () {
@@ -166,6 +166,41 @@ test('the PHP contrast rule matches the shared fixture (the JS tests check the s
         $color = VisualEditorPlugin::safeColor($case['color']) ?? $case['color'];
         same($case['text'], VisualEditorPlugin::contrastText($color), $case['color']);
     }
+});
+
+test('the page form offers a gradient: second color and direction after the background color', function () {
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'fr-FR';
+    $tab = contentTab(resolve(plugin()));
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
+    same(['header.background_color', 'header.background_color_2', 'header.background_direction'], array_column(array_slice($tab, 2, 3), 'name'));
+    same('header.media_order', $tab[5]['name'], 'nothing overwritten');
+    same('Seconde couleur (dégradé)', $tab[3]['label']);
+    same(['to bottom', 'to right', 'to bottom right', 'radial'], array_column($tab[4]['options'], 'value'));
+    same('Depuis le centre', $tab[4]['options'][3]['label']);
+});
+
+test('page background gradient: theme surfaces see through, text picked on the mix', function () {
+    $css = function (array $header): string {
+        $assets = new Assets();
+        plugin([], ['assets' => $assets, 'page' => new Page($header)])->addPageBackground();
+        return $assets->css[0] ?? '';
+    };
+    $gradient = $css(['background_color' => '#fde2e4', 'background_color_2' => '#ece4fb', 'background_direction' => 'to right']);
+    ok(str_contains($gradient, 'html{background:linear-gradient(to right,#fde2e4,#ece4fb) fixed!important'), $gradient);
+    ok(str_contains($gradient, '--q2-bg-elev:transparent'), 'content card lets the gradient through');
+    ok(str_contains($gradient, 'color:#1f2329'), 'dark text on a light mix');
+    ok(str_contains($css(['background_color' => '#1d3557', 'background_color_2' => '#6a4c93', 'background_direction' => 'radial']), 'radial-gradient(circle at center,#1d3557,#6a4c93)'), 'radial');
+    ok(str_contains($css(['background_color' => '#1d3557', 'background_color_2' => '#6a4c93']), 'color:#ffffff'), 'white text on a dark mix; default direction');
+    ok(str_contains($css(['background_color' => '#1d3557', 'background_color_2' => '#6a4c93']), 'linear-gradient(to bottom,'), 'default direction is top to bottom');
+    $bad = $css(['background_color' => '#fde2e4', 'background_color_2' => 'red;}x{', 'background_direction' => '0deg);}body{x']);
+    ok(!str_contains($bad, 'gradient') && str_contains($bad, '--q2-bg:#fde2e4'), 'invalid second color or direction: solid color');
+});
+
+test('mixing two colors gives the same result in PHP and JS (gradient text color)', function () {
+    same('#f5e3f0', VisualEditorPlugin::mixColors('#fde2e4', '#ece4fb'));
+    same('#808080', VisualEditorPlugin::mixColors('#000', '#fff'));
+    same('#141e28', VisualEditorPlugin::mixColors('rgb(10, 20, 30)', '#1e2832'));
+    same(null, VisualEditorPlugin::mixColors('#fde2e4', 'red'));
 });
 
 // --- Tables ------------------------------------------------------------------------------------------

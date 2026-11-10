@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
-import { contrastText } from '../src/markdown.js';
+import { contrastText, mixColors } from '../src/markdown.js';
 
 // Some knowledge must live in several places (Grav reads defaults from the YAML, the admin form from the
 // blueprint; the contrast rule runs in PHP and JS). These tests fail as soon as the copies drift apart.
@@ -41,4 +41,11 @@ test('the JS contrast rule matches the shared fixture (the PHP tests check the s
 test('plain tables do not show their header row in bold in the editor', () => {
   const css = read('assets/css/editor.css');
   assert.match(css, /\.ve-table-style\[data-style=plain\] th[^{]*\{[^}]*font-weight:inherit/);
+});
+
+test('mixing two colors gives the same result in JS and PHP (gradient text color)', () => {
+  assert.equal(mixColors('#fde2e4', '#ece4fb'), '#f5e3f0');
+  assert.equal(mixColors('#000', '#fff'), '#808080');
+  assert.equal(mixColors('rgb(10, 20, 30)', '#1e2832'), '#141e28');
+  assert.equal(mixColors('#fde2e4', 'red'), '');
 });

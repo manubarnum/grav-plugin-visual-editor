@@ -445,6 +445,24 @@ export function colorFromOpen(open) {
   return match ? match[1].trim() : '';
 }
 
+/** The average of two hex or rgb() colors as hex, or '' when either cannot be read (same as PHP mixColors()). */
+export function mixColors(first, second) {
+  const rgb = (value) => {
+    const color = String(value ?? '').trim();
+    let match = color.match(/^#([0-9a-f]{3,8})$/i);
+    if (match) {
+      const hex = match[1].length <= 4 ? match[1].replace(/./g, '$&$&') : match[1];
+      return [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    }
+    match = color.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+    return match ? match.slice(1, 4).map(Number) : null;
+  };
+  const a = rgb(first);
+  const b = rgb(second);
+  if (!a || !b) return '';
+  return '#' + a.map((value, i) => Math.round((value + b[i]) / 2).toString(16).padStart(2, '0')).join('');
+}
+
 /** Dark or white text, whichever reads better on the background (WCAG relative luminance). */
 export function contrastText(color) {
   const value = String(color ?? '').trim();

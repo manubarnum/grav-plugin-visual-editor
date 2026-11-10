@@ -24,6 +24,14 @@ class VisualEditorPlugin extends Plugin
     /** Admin2 custom field type: `admin-next/fields/<type>.js`, also the content_editor preference value. */
     public const FIELD_TYPE = 'visual-editor';
 
+    /** Gradient directions: frontmatter value => [label, CSS gradient opening]. Anything else is ignored. */
+    public const GRADIENT_DIRECTIONS = [
+        'to bottom' => ['Top to bottom', 'linear-gradient(to bottom'],
+        'to right' => ['Left to right', 'linear-gradient(to right'],
+        'to bottom right' => ['Diagonal', 'linear-gradient(to bottom right'],
+        'radial' => ['From the center', 'radial-gradient(circle at center'],
+    ];
+
     /** Page frontmatter key holding the page background color. */
     public const BACKGROUND_FIELD = 'header.background_color';
 
@@ -71,6 +79,13 @@ class VisualEditorPlugin extends Plugin
     private const LABELS = [
         'fr' => [
             'Page background color' => 'Couleur de fond de la page',
+            'Second color (gradient)' => 'Seconde couleur (dégradé)',
+            'Turn it on for a gradient from the page background color to this one.' => 'Activez-la pour un dégradé de la couleur de fond de la page vers celle-ci.',
+            'Gradient direction' => 'Direction du dégradé',
+            'Top to bottom' => 'De haut en bas',
+            'Left to right' => 'De gauche à droite',
+            'Diagonal' => 'En diagonale',
+            'From the center' => 'Depuis le centre',
             'Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'
                 => 'Fond de cette page sur le site. Désactivé, la page garde le fond du thème ; la couleur du texte s’adapte automatiquement.',
         ],
@@ -113,11 +128,15 @@ class VisualEditorPlugin extends Plugin
         if (!$page || !method_exists($page, 'header')) {
             return;
         }
-        $color = self::safeColor((string)($page->header()->background_color ?? ''));
+        $header = $page->header();
+        $color = self::safeColor((string)($header->background_color ?? ''));
         if ($color === null) {
             return;
         }
-        $text = self::contrastText($color);
+        $second = self::safeColor((string)($header->background_color_2 ?? ''));
+        $direction = self::GRADIENT_DIRECTIONS[(string)($header->background_direction ?? 'to bottom')] ?? self::GRADIENT_DIRECTIONS['to bottom'];
+        // With a gradient the text color is picked on the mix of both colors.
+        $text = self::contrastText($second !== null ? (self::mixColors($color, $second) ?? $color) : $color);
         $muted = $text === '#ffffff' ? 'rgba(255,255,255,.72)' : 'rgba(31,35,41,.68)';
         // Quark 2 (Blades/Pico) paints from these variables in both light and dark mode; the plain
         // html/body rules cover other themes. `html:root[data-theme]` outranks the theme's own selectors.
@@ -129,6 +148,12 @@ class VisualEditorPlugin extends Plugin
             . "--pico-background-color:{$color};--pico-card-background-color:{$color};"
             . "--q2-text:{$text};--q2-text-strong:{$text};--q2-text-muted:{$muted};--pico-color:{$text};--pico-muted-color:{$muted}}"
             . "html,body{background-color:{$color};color:{$text}}";
+        if ($second !== null) {
+            // The gradient covers the window and stays put while scrolling; surfaces let it through.
+            $css .= "html:root,html:root[data-theme]{--q2-bg-elev:transparent;--pico-background-color:transparent;--pico-card-background-color:transparent}"
+                . "html{background:{$direction[1]},{$color},{$second}) fixed!important;min-height:100%}"
+                . "body,#body-wrapper{background:transparent!important}";
+        }
         $this->grav['assets']->addInlineCss($css, ['priority' => 5]);
     }
 
@@ -171,6 +196,32 @@ class VisualEditorPlugin extends Plugin
         if (preg_match('/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/', $value)
             || preg_match('/^(?:rgb|hsl)a?\(\s*[0-9.]+(?:deg)?%?\s*(?:[,\s\/]\s*[0-9.]+%?\s*){2,3}\)$/', $value)) {
             return $value;
+        }
+
+        return null;
+    }
+
+    /** The average of two hex or rgb() colors as hex, or null when either cannot be read. */
+    public static function mixColors(string $first, string $second): ?string
+    {
+        $a = self::rgb($first);
+        $b = self::rgb($second);
+        if ($a === null || $b === null) {
+            return null;
+        }
+
+        return vsprintf('#%02x%02x%02x', array_map(static fn($x, $y) => (int)round(($x + $y) / 2), $a, $b));
+    }
+
+    /** [r, g, b] of a hex or rgb() color, or null. */
+    private static function rgb(string $color): ?array
+    {
+        if (preg_match('/^#([0-9a-f]{3,8})$/i', $color, $m)) {
+            $hex = strlen($m[1]) <= 4 ? preg_replace('/(.)/', '$1$1', $m[1]) : $m[1];
+            return [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
+        }
+        if (preg_match('/^rgba?\\(\\s*([0-9.]+)[,\\s]+([0-9.]+)[,\\s]+([0-9.]+)/i', $color, $m)) {
+            return [(float)$m[1], (float)$m[2], (float)$m[3]];
         }
 
         return null;
@@ -243,17 +294,47 @@ class VisualEditorPlugin extends Plugin
             // Page background color right below the editor (lists only: Admin2 serializes field lists).
             if ($isList && is_array($field) && ($field['name'] ?? null) === 'content' && isset($field['visual_editor'])
                 && $this->config->get('plugins.visual-editor.page_background', true) && !$this->hasField($fields, self::BACKGROUND_FIELD)) {
-                $out[] = [
-                    'name' => self::BACKGROUND_FIELD,
-                    'type' => 'colorpicker',
-                    'label' => $this->label('Page background color'),
-                    'help' => $this->label('Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'),
-                    'toggleable' => true,
-                ];
+                foreach ($this->pageFields() as $pageField) {
+                    $out[] = $pageField;
+                }
             }
         }
 
         return $out;
+    }
+
+    /** Fields added right below the editor: page background (solid or gradient). */
+    private function pageFields(): array
+    {
+        $directions = [];
+        foreach (self::GRADIENT_DIRECTIONS as $value => $definition) {
+            $directions[] = ['value' => $value, 'label' => $this->label($definition[0])];
+        }
+
+        return [
+            [
+                'name' => self::BACKGROUND_FIELD,
+                'type' => 'colorpicker',
+                'label' => $this->label('Page background color'),
+                'help' => $this->label('Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'),
+                'toggleable' => true,
+            ],
+            [
+                'name' => 'header.background_color_2',
+                'type' => 'colorpicker',
+                'label' => $this->label('Second color (gradient)'),
+                'help' => $this->label('Turn it on for a gradient from the page background color to this one.'),
+                'toggleable' => true,
+            ],
+            [
+                'name' => 'header.background_direction',
+                'type' => 'select',
+                'label' => $this->label('Gradient direction'),
+                'default' => 'to bottom',
+                'options' => $directions,
+                'toggleable' => true,
+            ],
+        ];
     }
 
     private function hasField(array $fields, string $name): bool
