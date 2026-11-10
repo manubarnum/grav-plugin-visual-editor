@@ -13,7 +13,30 @@ await rm(output, { recursive: true, force: true });
 await mkdir(join(plugin, 'admin-next', 'fields'), { recursive: true });
 
 const editorCss = await readFile(join(root, 'assets', 'css', 'editor.css'), 'utf8');
+/**
+ * Yjs must be ONE instance in the page: Admin2 creates the shared fragment with its own copy and
+ * publishes it on window.__GRAV_YJS__ (see src/collab.js). Bundling another copy would break
+ * y-prosemirror's `instanceof` checks, so `yjs` and `y-protocols/awareness` resolve to relay modules
+ * whose exports (the real packages' names, read here) are bound to Admin2's copy when collaboration
+ * starts. Nothing reads them before that, so pages without collaboration never need the global.
+ */
+const sharedModules = { yjs: await import('yjs'), 'y-protocols/awareness': await import('y-protocols/awareness') };
+const sharedYjs = {
+  name: 'grav-shared-yjs',
+  setup(builder) {
+    builder.onResolve({ filter: /^(?:yjs|y-protocols\/awareness)$/ }, (args) => ({ path: args.path, namespace: 'grav-shared-yjs' }));
+    builder.onLoad({ filter: /.*/, namespace: 'grav-shared-yjs' }, (args) => {
+      const names = Object.keys(sharedModules[args.path]).filter((name) => name !== 'default' && /^[A-Za-z_$][\w$]*$/.test(name));
+      return {
+        loader: 'js',
+        contents: names.map((name) => `export let ${name};`).join('\n')
+          + `\nexport function __bindShared(source) { ${names.map((name) => `${name} = source.${name};`).join(' ')} }\n`,
+      };
+    });
+  },
+};
 const bundled = await build({
+  plugins: [sharedYjs],
   metafile: true,
   entryPoints: [join(root, 'src', 'admin2-field.js')],
   bundle: true,

@@ -38,8 +38,10 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Isolation: a test that fails before its own cleanup must not leave an editor (and its window
 // listeners), a replaced fetch or a changed delay behind for the next tests.
 const mounted = new Set();
+const disposers = [];
 const originalFetch = globalThis.fetch;
 afterEach(() => {
+  disposers.splice(0).forEach((dispose) => dispose());
   mounted.forEach((el) => el.remove());
   mounted.clear();
   globalThis.fetch = originalFetch;
@@ -544,6 +546,78 @@ test('the interface follows Admin2 in French, and stays English otherwise', () =
   } finally { delete window.__GRAV_I18N; }
   const { el } = mount('Text\n');
   assert.equal(el.editor.toolbar.querySelector('[data-action="bold"]').title, 'Bold');
+});
+
+/** Two peers: two Y.Docs that forward their updates to each other, as Admin2's sync providers do. */
+async function collabPeers() {
+  const Y = await import('yjs');
+  const { Awareness } = await import('y-protocols/awareness');
+  const docs = [new Y.Doc(), new Y.Doc()];
+  docs[0].on('update', (update, origin) => { if (origin !== 'peer') Y.applyUpdate(docs[1], update, 'peer'); });
+  docs[1].on('update', (update, origin) => { if (origin !== 'peer') Y.applyUpdate(docs[0], update, 'peer'); });
+  const peers = docs.map((doc, i) => ({ fragment: doc.getXmlFragment('content'), awareness: new Awareness(doc), user: { name: `User ${i + 1}`, color: '#3d7eff' } }));
+  // Awareness keeps a timer running: destroy peers after the test so the process can exit.
+  disposers.push(() => { mounted.forEach((el) => el.remove()); peers.forEach((peer) => peer.awareness.destroy()); docs.forEach((doc) => doc.destroy()); });
+  return peers;
+}
+
+/** Mount like CustomFieldWrapper does when collaboration is on: yFragment/yAwareness/yUser before connecting. */
+function mountCollab(value, peer) {
+  const el = document.createElement(tag);
+  mounted.add(el);
+  const changes = [];
+  el.yFragment = peer.fragment;
+  el.yAwareness = peer.awareness;
+  el.yUser = peer.user;
+  el.field = { name: 'content', visual_editor: { smartTypography: false } };
+  el.value = value;
+  el.addEventListener('change', (event) => { if (event.target === el) changes.push(event.detail); });
+  document.body.append(el);
+  return { el, changes };
+}
+
+test('collaboration: the first editor seeds the shared fragment, the second one gets its content', async () => {
+  const [one, two] = await collabPeers();
+  const a = mountCollab('# Title\n\nShared **text**.\n', one);
+  assert.ok(one.fragment.length > 0, 'fragment seeded from the Markdown');
+  const b = mountCollab('stale value from the form\n', two);
+  assert.equal(b.el.editor.getMarkdown(), '# Title\n\nShared **text**.\n');
+  assert.equal(b.el.querySelector('.ProseMirror h1').textContent, 'Title');
+  assert.deepEqual(a.changes, [], 'mounting reports nothing');
+});
+
+test('collaboration: an edit in one editor reaches the other, and both report it', async () => {
+  const [one, two] = await collabPeers();
+  const a = mountCollab('Hello\n', one);
+  const b = mountCollab('Hello\n', two);
+  const tiptap = a.el.editor.editor;
+  tiptap.commands.setTextSelection(tiptap.state.doc.content.size - 1);
+  tiptap.commands.insertContent(' world');
+  assert.equal(a.changes.at(-1), 'Hello world\n');
+  assert.equal(b.el.querySelector('.ProseMirror p').textContent, 'Hello world');
+  assert.equal(b.changes.at(-1), 'Hello world\n');
+});
+
+test('collaboration: undo uses the shared history; value echoes are ignored; replaceContent replaces', async () => {
+  const [one, two] = await collabPeers();
+  const a = mountCollab('Hello\n', one);
+  const b = mountCollab('Hello\n', two);
+  const tiptap = a.el.editor.editor;
+  tiptap.commands.setTextSelection(tiptap.state.doc.content.size - 1);
+  tiptap.commands.insertContent('!');
+  a.el.editor.toolbar.querySelector('[data-action="undo"]').click();
+  assert.equal(a.el.editor.getMarkdown(), 'Hello\n', 'toolbar undo');
+  assert.equal(b.el.querySelector('.ProseMirror p').textContent, 'Hello');
+  a.el.value = 'Something else from the form\n';
+  assert.equal(a.el.editor.getMarkdown(), 'Hello\n', 'the shared fragment is the source of truth');
+  a.el.replaceContent('## Replaced\n');
+  assert.equal(b.el.querySelector('.ProseMirror h2')?.textContent, 'Replaced');
+});
+
+test('collaboration: other participants show as cursors', async () => {
+  const [one] = await collabPeers();
+  mountCollab('Hello\n', one);
+  assert.deepEqual(one.awareness.getLocalState().user, { name: 'User 1', color: '#3d7eff' });
 });
 
 test('list buttons produce Markdown lists', async () => {

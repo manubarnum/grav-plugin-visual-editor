@@ -113,6 +113,15 @@ export class VisualEditorField extends HTMLElement {
 
   set value(value) {
     this._value = typeof value === 'string' ? value : value == null ? '' : String(value);
+    // Collaborating, the shared fragment is the source of truth: routine value syncs are ignored
+    // (as Admin2 expects); an explicit replacement goes through replaceContent().
+    if (this.editor?.collaboration) return;
+    this.editor?.setMarkdown(this._value);
+  }
+
+  /** Explicit content replacement (Admin2 calls it for replace/append actions); propagates to peers. */
+  replaceContent(markdown) {
+    this._value = String(markdown ?? '');
     this.editor?.setMarkdown(this._value);
   }
   get value() { return this.editor ? this.editor.getMarkdown() : this._value; }
@@ -127,7 +136,10 @@ export class VisualEditorField extends HTMLElement {
       resolveMediaUrl: (src) => this.resolveMedia(src),
     };
     const readonly = Boolean(this._field?.readonly || this._field?.disabled);
+    // Set by Admin2 before connecting when collaborative editing is on (CustomFieldWrapper.svelte).
+    const collaboration = this.yFragment ? { fragment: this.yFragment, awareness: this.yAwareness || null, user: this.yUser || null } : null;
     this.editor = new VisualEditor(this, {
+      collaboration,
       markdown: this._value,
       config,
       services: this.services(),

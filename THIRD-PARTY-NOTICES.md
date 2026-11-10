@@ -1,12 +1,36 @@
 # Third-party notices
 
-The editor bundle (admin-next/fields/visual-editor.js) includes 47 packages, listed with their license.
+The editor bundle (admin-next/fields/visual-editor.js) includes 49 packages, listed with their license.
 
 ## @tiptap/core 2.27.3 (MIT), @tiptap/extension-blockquote 2.27.3 (MIT), @tiptap/extension-bold 2.27.3 (MIT), @tiptap/extension-bullet-list 2.27.3 (MIT), @tiptap/extension-code 2.27.3 (MIT), @tiptap/extension-code-block 2.27.3 (MIT), @tiptap/extension-document 2.27.3 (MIT), @tiptap/extension-dropcursor 2.27.3 (MIT), @tiptap/extension-gapcursor 2.27.3 (MIT), @tiptap/extension-hard-break 2.27.3 (MIT), @tiptap/extension-heading 2.27.3 (MIT), @tiptap/extension-highlight 2.27.3 (MIT), @tiptap/extension-history 2.27.3 (MIT), @tiptap/extension-horizontal-rule 2.27.3 (MIT), @tiptap/extension-image 2.27.3 (MIT), @tiptap/extension-italic 2.27.3 (MIT), @tiptap/extension-link 2.27.3 (MIT), @tiptap/extension-list-item 2.27.3 (MIT), @tiptap/extension-ordered-list 2.27.3 (MIT), @tiptap/extension-paragraph 2.27.3 (MIT), @tiptap/extension-strike 2.27.3 (MIT), @tiptap/extension-subscript 2.27.3 (MIT), @tiptap/extension-superscript 2.27.3 (MIT), @tiptap/extension-table 2.27.3 (MIT), @tiptap/extension-table-cell 2.27.3 (MIT), @tiptap/extension-table-header 2.27.3 (MIT), @tiptap/extension-table-row 2.27.3 (MIT), @tiptap/extension-text 2.27.3 (MIT), @tiptap/extension-typography 2.27.3 (MIT), @tiptap/pm 2.27.3 (MIT), @tiptap/starter-kit 2.27.3 (MIT)
 
 MIT License
 
 Copyright (c) 2025, Tiptap GmbH
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## lib0 0.2.120 (MIT), y-prosemirror 1.3.7 (MIT)
+
+The MIT License (MIT)
+
+Copyright (c) 2019 Kevin Jahns <kevin.jahns@protonmail.com>.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

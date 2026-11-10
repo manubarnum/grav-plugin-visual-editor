@@ -433,7 +433,8 @@ const FlexibleListItem = ListItem.extend({ content: 'block+' });
 
 export function createExtensions(config) {
   return [
-    StarterKit.configure({ blockquote: false, codeBlock: false, code: false, link: false, listItem: false }),
+    // history: false when collaborating — y-prosemirror's shared undo replaces it.
+    StarterKit.configure({ blockquote: false, codeBlock: false, code: false, link: false, listItem: false, ...(config.history === false ? { history: false } : {}) }),
     CodeInLink,
     FlexibleListItem,
     ReferenceLink.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: null } }),

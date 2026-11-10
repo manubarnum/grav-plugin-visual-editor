@@ -1,8 +1,9 @@
-import { Editor } from '@tiptap/core';
+import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
 import { detectMarkdownStyle, escapeHtml, imageWidth } from './markdown.js';
 import { defaults, element, icons, labels, messages } from './editor/ui.js';
 import { detectLocale, setLocale, t } from './i18n.js';
+import { canSharedRedo, canSharedUndo, collaborationExtension, sharedRedo, sharedUndo, startCollaboration } from './collab.js';
 import { blockMethods } from './editor/blocks.js';
 import { dialogMethods } from './editor/dialog.js';
 import { imageMethods } from './editor/images.js';
@@ -18,8 +19,10 @@ export const defaultConfig = { theme: 'auto', smartTypography: true, shortcodePr
  * `services` are optional async adapters: listMedia(), upload(file), pickSiteMedia(), preview(source).
  */
 export class VisualEditor {
-  constructor(host, { markdown = '', config = {}, services = {}, onChange = () => {} } = {}) {
+  constructor(host, { markdown = '', config = {}, services = {}, onChange = () => {}, collaboration = null } = {}) {
     this.host = host;
+    // Admin2 collaborative editing: { fragment, awareness, user }; the shared fragment is the source of truth.
+    this.collaboration = collaboration;
     this.services = services;
     this.onChange = onChange;
     this.config = {
@@ -37,10 +40,18 @@ export class VisualEditor {
     this.markdownStyle = detectMarkdownStyle(this.markdown);
     this.onKeydown = (event) => { if (event.key === 'Escape' && this.dialogElement) this.closeDialog(); };
     this.buildShell();
+    // Shared undo history replaces TipTap's own when collaborating (y-prosemirror requirement).
+    const extensions = createExtensions({ ...this.config, history: !collaboration });
+    let content = this.toHtml(this.markdown);
+    if (collaboration) {
+      const { doc, mapping } = startCollaboration(collaboration, getSchema(extensions), content);
+      extensions.push(collaborationExtension(collaboration, mapping));
+      content = doc.toJSON();
+    }
     this.editor = new Editor({
       element: this.content,
-      extensions: createExtensions(this.config),
-      content: this.toHtml(this.markdown),
+      extensions,
+      content,
       editorProps: {
         attributes: { 'aria-label': 'Visual Markdown editor', role: 'textbox', 'aria-multiline': 'true', spellcheck: 'true' },
         handleDrop: (view, event, slice, moved) => this.dropFiles(event, moved),
@@ -52,6 +63,8 @@ export class VisualEditor {
       onTransaction: () => this.updateToolbar(),
       onCreate: () => { this.content.querySelector('.ProseMirror')._veView = this.editor.view; },
     });
+    // Joining a session shows the shared document, which may differ from the form's value.
+    if (collaboration) this.markdown = documentToMarkdown(this.editor.state.doc, this.markdownStyle);
     this.bindEvents();
     this.updateCount();
     this.updateToolbar();
@@ -215,8 +228,8 @@ export class VisualEditor {
       case 'codeBlock': return chain().toggleCodeBlock().run();
       case 'raw': return this.rawDialog();
       case 'shortcode': return this.shortcodeDialog();
-      case 'undo': return chain().undo().run();
-      case 'redo': return chain().redo().run();
+      case 'undo': return this.collaboration ? sharedUndo(this.editor.state) : chain().undo().run();
+      case 'redo': return this.collaboration ? sharedRedo(this.editor.state) : chain().redo().run();
       case 'highlight': return chain().toggleHighlight().run();
       case 'subscript': return chain().toggleSubscript().run();
       case 'superscript': return chain().toggleSuperscript().run();
@@ -318,8 +331,8 @@ export class VisualEditor {
       const name = button.dataset.action;
       const active = { bold: 'bold', italic: 'italic', strike: 'strike', link: 'link', bulletList: 'bulletList', orderedList: 'orderedList', blockquote: 'blockquote', codeBlock: 'codeBlock', highlight: 'highlight', subscript: 'subscript', superscript: 'superscript', keyboard: 'keyboard', citation: 'citation' }[name];
       if (active) button.setAttribute('aria-pressed', String(this.editor.isActive(active)));
-      if (name === 'undo') button.disabled = !this.editor.can().undo();
-      if (name === 'redo') button.disabled = !this.editor.can().redo();
+      if (name === 'undo') button.disabled = !(this.collaboration ? canSharedUndo(this.editor.state) : this.editor.can().undo());
+      if (name === 'redo') button.disabled = !(this.collaboration ? canSharedRedo(this.editor.state) : this.editor.can().redo());
       if (name === 'colorBlock') button.setAttribute('aria-pressed', String(colorBlock));
       if (name.startsWith('align')) button.setAttribute('aria-pressed', String(alignment === name.slice(5).toLowerCase()));
     });
