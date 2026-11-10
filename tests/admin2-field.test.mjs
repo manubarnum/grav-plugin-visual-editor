@@ -372,7 +372,7 @@ test('page settings: former header fields are shown and overridden, even by an e
   el.remove();
 });
 
-test('toolbar: only the configured buttons, in order; an empty list is an empty toolbar', () => {
+test('toolbar: only the configured buttons, grouped in the reference order; an empty list is an empty toolbar', () => {
   const actions = (toolbar) => {
     const { el } = mount('Text\n', { name: 'content', type: 'visual-editor', visual_editor: { toolbar } });
     const names = [...el.editor.toolbar.querySelectorAll('[data-action]')].map((button) => button.dataset.action);
@@ -380,9 +380,14 @@ test('toolbar: only the configured buttons, in order; an empty list is an empty 
     return names;
   };
   assert.deepEqual(actions(['bold', 'link', 'more']), ['bold', 'link', 'more']);
+  assert.deepEqual(actions(['pageSettings', 'image', 'alignLeft', 'table', 'bold']), ['bold', 'table', 'alignLeft', 'image', 'pageSettings'], 'reference order whatever the configured order');
   assert.deepEqual(actions([]), []);
   const all = actions(null);
-  assert.ok(all.includes('pageSettings') && all.at(-1) === 'more' && all[0] === 'undo', 'no list: every button');
+  assert.deepEqual(all.slice(-7), ['table', 'alignLeft', 'alignCenter', 'alignRight', 'image', 'colorBlock', 'pageSettings'], 'table with alignment, then media and colors at the right');
+  const { el } = mount('Text\n', { name: 'content', type: 'visual-editor', visual_editor: { toolbar: ['undo', 'bold', 'table', 'alignLeft', 'image'] } });
+  const layout = [...el.editor.toolbar.children].map((item) => item.dataset.action || '|');
+  assert.deepEqual(layout, ['undo', '|', 'bold', '|', 'table', 'alignLeft', '|', 'image'], 'a separator between groups');
+  el.remove();
 });
 
 test('page settings: no button when both site options are off', () => {

@@ -8,6 +8,7 @@
     * Page effect: falling snow, twinkling stars or falling sparkles over a page, or the same still, light, normal or strong; CSS only, still for visitors who prefer reduced motion (`page_effects` option)
     * Page background and effect are set with the ✦ toolbar button (also in distraction-free mode), kept as a `<!-- ve-page … -->` comment opening the content; the former fields under the editor are gone (their values still apply until the button is used)
 1. [](#improved)
+    * Toolbar in five groups (history, text, blocks, table and alignment, image and colors) with drawn SVG icons of one size instead of text symbols
     * Toolbar buttons are chosen with one checkbox each in the plugin settings (the former comma-separated list still works); ✦ and ⋯ can be hidden too
     * The editor footer describes how edits are saved in Admin2
 

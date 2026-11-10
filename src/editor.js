@@ -1,7 +1,7 @@
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
 import { detectMarkdownStyle, escapeHtml, imageWidth, splitPageSettings } from './markdown.js';
-import { defaults, element, icons, labels, messages } from './editor/ui.js';
+import { defaults, element, iconSvg, icons, labels, messages, toolbarGroups } from './editor/ui.js';
 import { detectLocale, setLocale, t } from './i18n.js';
 import { canSharedRedo, canSharedUndo, collaborationExtension, sharedRedo, sharedUndo, startCollaboration } from './collab.js';
 import { blockMethods } from './editor/blocks.js';
@@ -155,21 +155,19 @@ export class VisualEditor {
     this.sourceButton = this.button('source', 'Source', () => this.setMode('source'), false);
     this.visualButton.setAttribute('aria-pressed', 'true'); this.sourceButton.setAttribute('aria-pressed', 'false');
     const themeButton = this.button('theme', 'Toggle editor appearance', () => this.toggleTheme(), false);
-    themeButton.textContent = '◐'; themeButton.title = t('Light / dark editor');
+    themeButton.replaceChildren(iconSvg('theme')); themeButton.title = t('Light / dark editor');
     const fullscreenButton = this.button('fullscreen', 'Toggle distraction-free editing', () => this.toggleFullscreen(), false);
     modes.append(this.visualButton, this.sourceButton, themeButton, fullscreenButton);
     header.append(identity, modes);
     this.toolbar = element('div', 've-toolbar'); this.toolbar.setAttribute('role', 'toolbar'); this.toolbar.setAttribute('aria-label', t('Content formatting'));
-    // The host's list as given (an empty list is an empty toolbar); without one, every button.
+    // The host's list chooses the buttons (an empty list is an empty toolbar; without one, every button);
+    // they always come in the reference order, grouped, with a separator between groups.
     const pageSettings = this.config.pageBackground !== false || this.config.pageEffects !== false;
-    const tools = (Array.isArray(this.config.toolbar) ? this.config.toolbar : defaults).filter((name) => name !== 'pageSettings' || pageSettings);
-    let previousGroup = '';
-    tools.forEach((name) => {
-      if (!labels[name]) return;
-      const group = ['undo', 'redo'].includes(name) ? 'history' : ['heading', 'bold', 'italic', 'strike', 'link'].includes(name) ? 'inline' : 'blocks';
-      if (previousGroup && previousGroup !== group) this.toolbar.append(element('span', 've-separator'));
-      previousGroup = group;
-      this.toolbar.append(this.toolButton(name));
+    const chosen = new Set(Array.isArray(this.config.toolbar) ? this.config.toolbar : defaults);
+    if (!pageSettings) chosen.delete('pageSettings');
+    toolbarGroups.map((group) => group.filter((name) => chosen.has(name))).filter((group) => group.length).forEach((group, index) => {
+      if (index) this.toolbar.append(element('span', 've-separator'));
+      group.forEach((name) => this.toolbar.append(this.toolButton(name)));
     });
     this.tableBar = element('div', 've-tablebar'); this.tableBar.hidden = true;
     const tableCommands = [
@@ -204,7 +202,7 @@ export class VisualEditor {
     label = t(label);
     const button = element('button', 've-button');
     button.type = 'button'; button.title = label; button.setAttribute('aria-label', label); button.dataset.action = name;
-    if (symbol && icons[name]) { const icon = element('span', `ve-icon ve-icon-${name}`, icons[name]); icon.setAttribute('aria-hidden', 'true'); button.append(icon); }
+    if (symbol && icons[name]) { const icon = element('span', `ve-icon ve-icon-${name}`); icon.setAttribute('aria-hidden', 'true'); icon.append(iconSvg(name)); button.append(icon); }
     else button.textContent = label;
     button.addEventListener('click', (event) => { event.preventDefault(); action(event); });
     return button;

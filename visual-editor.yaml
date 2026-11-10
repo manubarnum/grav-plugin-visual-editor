@@ -15,20 +15,20 @@ toolbar:
   italic: true
   strike: true
   link: true
-  image: true
+  more: true
   bulletList: true
   orderedList: true
   blockquote: true
   alert: true
-  colorBlock: true
-  alignLeft: true
-  alignCenter: true
-  alignRight: true
-  table: true
   codeBlock: true
   raw: true
   shortcode: true
   source: true
+  table: true
+  alignLeft: true
+  alignCenter: true
+  alignRight: true
+  image: true
+  colorBlock: true
   pageSettings: true
-  more: true
 shortcodes: []

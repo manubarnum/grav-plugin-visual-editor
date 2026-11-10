@@ -89,22 +89,22 @@ form:
                 italic: true
                 strike: true
                 link: true
-                image: true
+                more: true
                 bulletList: true
                 orderedList: true
                 blockquote: true
                 alert: true
-                colorBlock: true
-                alignLeft: true
-                alignCenter: true
-                alignRight: true
-                table: true
                 codeBlock: true
                 raw: true
                 shortcode: true
                 source: true
+                table: true
+                alignLeft: true
+                alignCenter: true
+                alignRight: true
+                image: true
+                colorBlock: true
                 pageSettings: true
-                more: true
               options:
                 undo: '↶ Undo'
                 redo: '↷ Redo'
@@ -113,19 +113,19 @@ form:
                 italic: 'I — Italic'
                 strike: 'S — Strikethrough'
                 link: '🔗 Link'
-                image: '▧ Image (page media, upload, resize)'
+                more: '⋯ More formatting (highlight, subscript, superscript, keyboard, citation, abbreviation)'
                 bulletList: '•≡ Bulleted list'
                 orderedList: '1.≡ Numbered list'
                 blockquote: '❝ Blockquote'
                 alert: 'ⓘ GitHub-style alert'
-                colorBlock: '▣ Colored block (color or gradient)'
-                alignLeft: '⇤ Align left'
-                alignCenter: '↔ Center'
-                alignRight: '⇥ Align right'
-                table: '⊞ Table'
                 codeBlock: '{ } Code block'
                 raw: '</> HTML or Twig block'
                 shortcode: '[ ] Shortcode'
                 source: '⌘ Markdown source'
+                table: '⊞ Table'
+                alignLeft: '⇤ Align left'
+                alignCenter: '↔ Center'
+                alignRight: '⇥ Align right'
+                image: '▧ Image (page media, upload, resize)'
+                colorBlock: '▣ Colored block (color or gradient)'
                 pageSettings: '✦ Page background and effects (also needs one of the page options above)'
-                more: '⋯ More formatting (highlight, subscript, superscript, keyboard, citation, abbreviation)'
