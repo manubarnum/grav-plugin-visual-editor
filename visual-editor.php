@@ -157,9 +157,10 @@ class VisualEditorPlugin extends Plugin
     }
 
     /**
-     * Front end: snow, stars or sparkles over the page (`page_effect` frontmatter). CSS only: two fixed
-     * layers (body::before far, body::after near) tiled with dots, moved by transform (cheap to animate),
-     * never catching clicks, and still for visitors who prefer reduced motion.
+     * Front end: snow, stars or sparkles over the page (page settings). CSS only: two fixed layers
+     * (body::before far, body::after near) tiled with SVG particles; falling moves the layer by transform
+     * with a sideways sway, twinkling runs inside the tile per particle. Never catches clicks; visitors who
+     * prefer reduced motion get still layers and tiles without twinkling.
      */
     public function addPageEffect(): void
     {
@@ -190,81 +191,115 @@ class VisualEditorPlugin extends Plugin
     public static function pageEffectCss(array $effect, ?string $background, string $intensity = 'normal'): string
     {
         [$more, $bigger, $slower] = self::EFFECT_INTENSITIES[$intensity] ?? self::EFFECT_INTENSITIES['normal'];
-        // Light background (or none): blue-grey snow and deep gold; dark background: white and pale gold.
+        // Light background (or none): deeper tones; dark background: white and pale tones.
         $dark = $background !== null && self::contrastText($background) === '#ffffff';
         $colors = [
             'snow' => $dark ? ['rgba(255,255,255,.95)', 'rgba(255,255,255,.75)'] : ['rgba(122,146,180,.9)', 'rgba(122,146,180,.7)'],
-            'stars' => $dark ? ['rgba(255,236,170,.95)', 'rgba(255,255,255,.9)'] : ['rgba(212,160,23,.9)', 'rgba(219,112,160,.85)'],
-            'sparkles' => $dark ? ['rgba(255,214,120,.95)', 'rgba(255,190,230,.9)'] : ['rgba(212,160,23,.9)', 'rgba(219,112,160,.85)'],
+            'stars' => $dark ? ['rgba(255,236,170,.95)', 'rgba(255,255,255,.95)'] : ['rgba(212,160,23,.9)', 'rgba(219,112,160,.85)'],
+            'sparkles' => $dark
+                ? ['rgba(255,214,120,.95)', 'rgba(255,170,220,.95)', 'rgba(200,180,255,.95)', 'rgba(150,230,255,.95)', 'rgba(255,255,255,.95)']
+                : ['rgba(212,160,23,.9)', 'rgba(219,92,150,.85)', 'rgba(130,100,210,.85)', 'rgba(40,160,200,.85)', 'rgba(230,150,40,.9)'],
         ][$effect['kind']];
         // Far layer (before): many small particles, slow; near layer (after): fewer, bigger, faster.
         $layers = [
-            'before' => ['tile' => 300, 'count' => 26, 'size' => [2.5, 5], 'seconds' => 11, 'seed' => 7],
-            'after' => ['tile' => 440, 'count' => 18, 'size' => [5, 10], 'seconds' => 7, 'seed' => 3],
+            'before' => ['tile' => 300, 'count' => 26, 'size' => [2.5, 5], 'seconds' => 11, 'seed' => 7, 'sway' => 12],
+            'after' => ['tile' => 440, 'count' => 18, 'size' => [5, 10], 'seconds' => 7, 'seed' => 3, 'sway' => 22],
         ];
         $css = '';
+        $still = '';
         foreach ($layers as $pseudo => $layer) {
             $tile = $layer['tile'];
+            $count = (int)round($layer['count'] * $more * ($effect['kind'] === 'sparkles' ? 1.6 : 1));
             $size = [$layer['size'][0] * $bigger, $layer['size'][1] * $bigger];
-            $image = self::particleTile($effect['kind'], $tile, (int)round($layer['count'] * $more), $size, $colors, $layer['seed']);
-            $animations = [];
+            // Twinkling happens inside the tile (each particle on its own rhythm); falling moves the layer.
+            $image = self::particleTile($effect['kind'], $tile, $count, $size, $colors, $layer['seed'], $effect['twinkle']);
+            $animation = '';
             if ($effect['fall']) {
                 $seconds = (int)round($layer['seconds'] * $slower * ($effect['kind'] === 'sparkles' ? 1.3 : 1));
-                $animations[] = "ve-fx-fall {$seconds}s linear infinite";
+                $animation = "animation:ve-fx-fall-{$pseudo} {$seconds}s linear infinite;will-change:transform;";
+                $sway = $layer['sway'];
+                $css .= "@keyframes ve-fx-fall-{$pseudo}{0%{transform:translate(0,0)}25%{transform:translate({$sway}px,calc(var(--ve-fx-tile) * .25))}"
+                    . "50%{transform:translate(0,calc(var(--ve-fx-tile) * .5))}75%{transform:translate(-{$sway}px,calc(var(--ve-fx-tile) * .75))}"
+                    . "100%{transform:translate(0,var(--ve-fx-tile))}}";
             }
-            if ($effect['twinkle']) {
-                $animations[] = 've-fx-twinkle ' . ($pseudo === 'before' ? '1.6s' : '2.4s') . ' ease-in-out infinite alternate';
-            }
-            $css .= "body::{$pseudo}{content:\"\";position:fixed;left:0;right:0;top:-{$tile}px;height:calc(100% + {$tile}px);"
+            $css .= "body::{$pseudo}{content:\"\";position:fixed;left:-{$layer['sway']}px;right:-{$layer['sway']}px;top:-{$tile}px;height:calc(100% + {$tile}px);"
                 . "pointer-events:none;z-index:2147483000;--ve-fx-tile:{$tile}px;"
-                . "background-image:url(\"{$image}\");background-size:{$tile}px {$tile}px;background-repeat:repeat;"
-                . ($animations ? 'animation:' . implode(',', $animations) . ';will-change:' . ($effect['fall'] ? 'transform' : 'opacity') : '')
-                . '}';
-        }
-        if ($effect['fall']) {
-            $css .= '@keyframes ve-fx-fall{from{transform:translateY(0)}to{transform:translateY(var(--ve-fx-tile))}}';
-        }
-        if ($effect['twinkle']) {
-            $css .= '@keyframes ve-fx-twinkle{from{opacity:.5}to{opacity:1}}';
+                . "background-image:url(\"{$image}\");background-size:{$tile}px {$tile}px;background-repeat:repeat;{$animation}}";
+            if ($effect['fall'] || $effect['twinkle']) {
+                // Reduced motion: the layer stops and shows a tile without twinkling.
+                $static = $effect['twinkle'] ? self::particleTile($effect['kind'], $tile, $count, $size, $colors, $layer['seed'], false) : $image;
+                $still .= "body::{$pseudo}{animation:none!important;transform:none!important;background-image:url(\"{$static}\")}";
+            }
         }
 
-        return $css . '@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none!important}}';
+        return $css . ($still !== '' ? "@media (prefers-reduced-motion:reduce){{$still}}" : '');
     }
 
     /**
      * One square SVG tile (data URI) of particles at fixed pseudo-random places (the same page always
-     * looks the same): soft glowing dots for snow, four-pointed stars for stars, a mix for sparkles.
+     * looks the same): soft round flakes for snow, four-pointed stars for stars, multicolored glitter
+     * (small diamonds and glints) for sparkles. With `$twinkle`, every particle pulses on its own rhythm
+     * (CSS animation inside the SVG).
      */
-    private static function particleTile(string $kind, int $tile, int $count, array $size, array $colors, int $seed): string
+    private static function particleTile(string $kind, int $tile, int $count, array $size, array $colors, int $seed, bool $twinkle): string
     {
         $next = static function () use (&$seed): float {
             $seed = ($seed * 1103515245 + 12345) % 2147483648;
             return $seed / 2147483648;
         };
-        $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='{$tile}' height='{$tile}'>"
-            . "<defs><radialGradient id='a'><stop offset='0' stop-color='{$colors[0]}'/><stop offset='.45' stop-color='{$colors[0]}'/>"
-            . "<stop offset='1' stop-color='{$colors[0]}' stop-opacity='0'/></radialGradient>"
-            . "<radialGradient id='b'><stop offset='0' stop-color='{$colors[1]}'/><stop offset='.45' stop-color='{$colors[1]}'/>"
-            . "<stop offset='1' stop-color='{$colors[1]}' stop-opacity='0'/></radialGradient></defs>";
+        $svg = "<svg xmlns='http://www.w3.org/2000/svg' width='{$tile}' height='{$tile}'>";
+        if ($twinkle) {
+            // Stars glow and fade slowly; glitter flashes quickly.
+            $low = $kind === 'stars' ? '.15' : '.3';
+            $svg .= "<style>.t{transform-box:fill-box;transform-origin:center;animation:t ease-in-out infinite alternate}"
+                . "@keyframes t{from{opacity:{$low};transform:scale(.55)}to{opacity:1;transform:scale(1)}}</style>";
+        }
+        if ($kind === 'snow') {
+            $svg .= "<defs>";
+            foreach (['a' => $colors[0], 'b' => $colors[1]] as $id => $color) {
+                $svg .= "<radialGradient id='{$id}'><stop offset='0' stop-color='{$color}'/><stop offset='.45' stop-color='{$color}'/>"
+                    . "<stop offset='1' stop-color='{$color}' stop-opacity='0'/></radialGradient>";
+            }
+            $svg .= "</defs>";
+        }
+        $star = static function (float $x, float $y, float $s): string {
+            return "M{$x} " . round($y - $s, 1) . "Q{$x} {$y} " . round($x + $s, 1) . " {$y}Q{$x} {$y} {$x} " . round($y + $s, 1)
+                . "Q{$x} {$y} " . round($x - $s, 1) . " {$y}Q{$x} {$y} {$x} " . round($y - $s, 1) . 'Z';
+        };
         for ($i = 0; $i < $count; $i++) {
             $x = round(8 + $next() * ($tile - 16), 1);
             $y = round(8 + $next() * ($tile - 16), 1);
-            $r = round(($size[0] + $next() * ($size[1] - $size[0])) * ($kind === 'snow' ? 1.3 : 1), 1);
-            $second = $i % 3 === 2;
-            $star = $kind === 'stars' ? $i % 4 !== 3 : ($kind === 'sparkles' && $i % 2 === 0);
-            if ($star) {
-                // Four-pointed star: points at r * 2.2, pinched toward the center.
-                $s = round($r * 2.2, 1);
-                $fill = $colors[$second ? 1 : 0];
-                $svg .= "<path fill='{$fill}' d='M{$x} " . ($y - $s) . "Q{$x} {$y} " . ($x + $s) . " {$y}Q{$x} {$y} {$x} " . ($y + $s)
-                    . "Q{$x} {$y} " . ($x - $s) . " {$y}Q{$x} {$y} {$x} " . ($y - $s) . "Z'/>";
+            $r = round($size[0] + $next() * ($size[1] - $size[0]), 1);
+            $rhythm = $next();
+            $animation = '';
+            if ($twinkle) {
+                $duration = $kind === 'stars' ? 1.2 + $rhythm * 2.4 : 0.4 + $rhythm * 0.9;
+                $animation = " class='t' style='animation-duration:" . round($duration, 2) . 's;animation-delay:-' . round($next() * 3, 2) . "s'";
+            }
+            if ($kind === 'snow') {
+                $svg .= "<circle cx='{$x}' cy='{$y}' r='" . round($r * 1.3, 1) . "' fill='url(#" . ($i % 3 === 2 ? 'b' : 'a') . ")'/>";
+            } elseif ($kind === 'stars') {
+                $color = $colors[$i % 3 === 2 ? 1 : 0];
+                $svg .= $i % 4 === 3
+                    ? "<circle cx='{$x}' cy='{$y}' r='" . round($r * .45, 1) . "' fill='{$color}'{$animation}/>"
+                    : "<path fill='{$color}' d='" . $star($x, $y, round($r * 2.2, 1)) . "'{$animation}/>";
             } else {
-                $svg .= "<circle cx='{$x}' cy='{$y}' r='{$r}' fill='url(%23" . ($second ? 'b' : 'a') . ")'/>";
+                // Glitter: tilted diamonds of every color, with a few bright glints.
+                $color = $colors[$i % count($colors)];
+                if ($i % 5 === 4) {
+                    $svg .= "<path fill='{$color}' d='" . $star($x, $y, round($r * 1.6, 1)) . "'{$animation}/>";
+                } else {
+                    $w = round($r * 1.4, 1);
+                    $h = round($r * .8, 1);
+                    $angle = (int)round($next() * 180);
+                    $svg .= "<g transform='rotate({$angle} {$x} {$y})'><path fill='{$color}' d='M{$x} " . round($y - $w, 1) . 'L' . round($x + $h, 1) . " {$y}L{$x} "
+                        . round($y + $w, 1) . 'L' . round($x - $h, 1) . " {$y}Z'{$animation}/></g>";
+                }
             }
         }
         $svg .= '</svg>';
 
-        return 'data:image/svg+xml,' . strtr($svg, ['<' => '%3C', '>' => '%3E', '#' => '%23']);
+        return 'data:image/svg+xml,' . strtr($svg, ['%' => '%25', '<' => '%3C', '>' => '%3E', '#' => '%23', '"' => '%22']);
     }
 
     /**
