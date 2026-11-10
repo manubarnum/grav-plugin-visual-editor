@@ -581,3 +581,48 @@ export function linkMarkdown(content, attrs) {
   if (style.autolinks && !attrs.title && attrs.href && /^[a-z][a-z0-9+.-]*:\S+$/i.test(attrs.href) && (content === attrs.href || content === escapeMarkdown(attrs.href))) return `<${attrs.href}>`;
   return `[${content}](${attrs.href || ''}${attrs.title ? ` "${String(attrs.title).replace(/"/g, '\\"')}"` : ''})`;
 }
+
+/** Page effects offered by the page settings (keys of PHP `PAGE_EFFECTS`). */
+export const pageEffects = ['snow', 'snow-still', 'stars', 'stars-still', 'sparkles', 'sparkles-still'];
+
+const pageColor = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const pageSettingsPattern = /^<!--\s*ve-page\b([^]*?)-->[ \t]*(?:\r?\n(?:[ \t]*\r?\n)?|$)/;
+
+/** Only the valid page settings: { background, background2, direction, effect }, each optional. */
+export function cleanPageSettings(settings) {
+  const out = {};
+  const background = String(settings?.background ?? '').trim();
+  if (pageColor.test(background)) {
+    out.background = background.toLowerCase();
+    const second = String(settings?.background2 ?? '').trim();
+    if (pageColor.test(second)) {
+      out.background2 = second.toLowerCase();
+      const direction = String(settings?.direction ?? '').trim();
+      if (direction !== 'to bottom' && gradientDirections[direction]) out.direction = direction;
+    }
+  }
+  const effect = String(settings?.effect ?? '').trim();
+  if (pageEffects.includes(effect)) out.effect = effect;
+  return out;
+}
+
+/**
+ * Page settings kept as an HTML comment opening the content (Admin2 lets a field write only its own
+ * value): `<!-- ve-page background="#…" effect="snow" -->`. Invisible on the site even without the
+ * plugin. Returns the settings (null when absent), the exact leading text and the rest of the content.
+ */
+export function splitPageSettings(markdown) {
+  const text = String(markdown ?? '');
+  const match = text.match(pageSettingsPattern);
+  if (!match) return { settings: null, prefix: '', body: text };
+  const raw = {};
+  for (const [, key, value] of match[1].matchAll(/([a-z0-9_-]+)\s*=\s*"([^"]*)"/gi)) raw[key.toLowerCase()] = value;
+  return { settings: cleanPageSettings(raw), prefix: match[0], body: text.slice(match[0].length) };
+}
+
+/** The leading comment for these settings ('' when there is nothing to keep). */
+export function pageSettingsPrefix(settings) {
+  const clean = cleanPageSettings(settings);
+  const attributes = ['background', 'background2', 'direction', 'effect'].filter((key) => clean[key]).map((key) => `${key}="${clean[key]}"`);
+  return attributes.length ? `<!-- ve-page ${attributes.join(' ')} -->\n\n` : '';
+}

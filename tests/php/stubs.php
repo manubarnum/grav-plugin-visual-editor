@@ -168,16 +168,3 @@ namespace VeTest {
         public function __construct(public array $body = []) {}
     }
 }
-
-namespace Grav\Plugin\Api\Services {
-    /** Admin2 preferences: only the effective admin language matters here. */
-    class PreferencesResolver
-    {
-        public static ?string $adminLanguage = null;
-        public function __construct($grav) {}
-        public function resolve($user, bool $canEditSite): array
-        {
-            return ['effective' => self::$adminLanguage === null ? [] : ['adminLanguage' => self::$adminLanguage]];
-        }
-    }
-}

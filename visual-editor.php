@@ -45,8 +45,8 @@ class VisualEditorPlugin extends Plugin
         'radial' => ['From the center', 'radial-gradient(circle at center'],
     ];
 
-    /** Page frontmatter key holding the page background color. */
-    public const BACKGROUND_FIELD = 'header.background_color';
+    /** Page settings written by the editor's button: an HTML comment opening the content. */
+    private const SETTINGS_COMMENT = '/^<!--\s*ve-page\b(.*?)-->[ \t]*(?:\r?\n(?:[ \t]*\r?\n)?|$)/s';
 
     public static function getSubscribedEvents(): array
     {
@@ -54,7 +54,7 @@ class VisualEditorPlugin extends Plugin
             'onAdminListContentEditors' => [['onAdminListContentEditors', 0]],
             'onApiBlueprintResolved' => [['onApiBlueprintResolved', 0]],
             'onApiRegisterRoutes' => [['onApiRegisterRoutes', 0]],
-            'onPageContentRaw' => [['addAlertStyles', 0]],
+            'onPageContentRaw' => [['stripPageSettings', 10], ['addAlertStyles', 0]],
             'onTwigSiteVariables' => [['addPageBackground', 0], ['addTableStyles', 0], ['addPageEffect', 0]],
         ];
     }
@@ -84,63 +84,39 @@ class VisualEditorPlugin extends Plugin
         $useByDefault = (bool)$this->config->get('plugins.visual-editor.site_default', true)
             && in_array($preference, ['', 'default', self::FIELD_TYPE], true);
 
-        $this->labelLanguage = $this->adminLanguage($user);
         $event['fields'] = $this->rewriteContentField($event['fields'], $useByDefault);
     }
 
-    /** Labels of the fields this plugin adds to the page form, by Admin2 language (English is the key). */
-    private const LABELS = [
-        'fr' => [
-            'Page background color' => 'Couleur de fond de la page',
-            'Second color (gradient)' => 'Seconde couleur (dégradé)',
-            'Turn it on for a gradient from the page background color to this one.' => 'Activez-la pour un dégradé de la couleur de fond de la page vers celle-ci.',
-            'Gradient direction' => 'Direction du dégradé',
-            'Top to bottom' => 'De haut en bas',
-            'Left to right' => 'De gauche à droite',
-            'Diagonal' => 'En diagonale',
-            'From the center' => 'Depuis le centre',
-            'Page effect' => 'Effet sur la page',
-            'A light decoration over the whole page on the site. Visitors who asked their system to reduce motion see it still.'
-                => 'Une légère décoration sur toute la page du site. Les visiteurs qui ont demandé à leur système de réduire les animations la voient figée.',
-            'Falling snow' => 'Neige qui tombe',
-            'Snow (still)' => 'Neige (figée)',
-            'Twinkling stars' => 'Étoiles scintillantes',
-            'Stars (still)' => 'Étoiles (figées)',
-            'Falling sparkles' => 'Paillettes qui tombent',
-            'Sparkles (still)' => 'Paillettes (figées)',
-            'Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'
-                => 'Fond de cette page sur le site. Désactivé, la page garde le fond du thème ; la couleur du texte s’adapte automatiquement.',
-        ],
-    ];
-
-    /** Language of the labels added to the page form, set per blueprint request. */
-    private string $labelLanguage = 'en';
-
-    private function label(string $english): string
-    {
-        return self::LABELS[$this->labelLanguage][$english] ?? $english;
-    }
-
     /**
-     * The user's Admin2 interface language (e.g. "fr" for fr-FR). The API translates its own labels with
-     * it, but fields added here arrive after that pass, so they are translated by label() instead.
+     * A page's background and effect: from the `<!-- ve-page … -->` comment opening its content (written by
+     * the editor's button), else from the former frontmatter fields (`background_color`, `background_color_2`,
+     * `background_direction`, `page_effect`). A comment, even empty, replaces those fields entirely.
      */
-    private function adminLanguage($user): string
+    public static function pageSettings($page): array
     {
-        $resolver = 'Grav\\Plugin\\Api\\Services\\PreferencesResolver';
-        if (!$user || !class_exists($resolver)) {
-            return 'en';
-        }
-        try {
-            $language = (new $resolver($this->grav))->resolve($user, false)['effective']['adminLanguage'] ?? '';
-        } catch (\Throwable $e) {
-            return 'en';
+        $raw = method_exists($page, 'rawMarkdown') ? (string)$page->rawMarkdown() : '';
+        if (preg_match(self::SETTINGS_COMMENT, ltrim($raw, "\u{FEFF}"), $match)) {
+            preg_match_all('/([a-z0-9_-]+)\s*=\s*"([^"]*)"/i', $match[1], $pairs, PREG_SET_ORDER);
+            $values = [];
+            foreach ($pairs as [, $key, $value]) {
+                $values[strtolower($key)] = trim($value);
+            }
+        } else {
+            $header = method_exists($page, 'header') ? $page->header() : null;
+            $read = static fn(string $key): string => is_object($header) && is_scalar($header->{$key} ?? null) ? trim((string)$header->{$key}) : '';
+            $values = ['background' => $read('background_color'), 'background2' => $read('background_color_2'),
+                'direction' => $read('background_direction'), 'effect' => $read('page_effect')];
         }
 
-        return strtolower(substr((string)$language, 0, 2)) ?: 'en';
+        return [
+            'background' => $values['background'] ?? '',
+            'background2' => $values['background2'] ?? '',
+            'direction' => $values['direction'] ?? '',
+            'effect' => $values['effect'] ?? '',
+        ];
     }
 
-    /** Front end: paint the page with its `background_color` (frontmatter), text color picked for contrast. */
+    /** Front end: paint the page with its background color or gradient, text color picked for contrast. */
     public function addPageBackground(): void
     {
         if ($this->isAdmin() || !$this->isEnabled() || !$this->config->get('plugins.visual-editor.page_background', true)) {
@@ -150,13 +126,13 @@ class VisualEditorPlugin extends Plugin
         if (!$page || !method_exists($page, 'header')) {
             return;
         }
-        $header = $page->header();
-        $color = self::safeColor((string)($header->background_color ?? ''));
+        $settings = self::pageSettings($page);
+        $color = self::safeColor($settings['background']);
         if ($color === null) {
             return;
         }
-        $second = self::safeColor((string)($header->background_color_2 ?? ''));
-        $direction = self::GRADIENT_DIRECTIONS[(string)($header->background_direction ?? 'to bottom')] ?? self::GRADIENT_DIRECTIONS['to bottom'];
+        $second = self::safeColor($settings['background2']);
+        $direction = self::GRADIENT_DIRECTIONS[$settings['direction']] ?? self::GRADIENT_DIRECTIONS['to bottom'];
         // With a gradient the text color is picked on the mix of both colors.
         $text = self::contrastText($second !== null ? (self::mixColors($color, $second) ?? $color) : $color);
         $muted = $text === '#ffffff' ? 'rgba(255,255,255,.72)' : 'rgba(31,35,41,.68)';
@@ -193,12 +169,13 @@ class VisualEditorPlugin extends Plugin
         if (!$page || !method_exists($page, 'header')) {
             return;
         }
-        $header = $page->header();
-        $effect = self::PAGE_EFFECTS[(string)($header->page_effect ?? '')] ?? null;
+        $settings = self::pageSettings($page);
+        $effect = self::PAGE_EFFECTS[$settings['effect']] ?? null;
         if ($effect === null) {
             return;
         }
-        $this->grav['assets']->addInlineCss(self::pageEffectCss($effect, self::safeColor((string)($header->background_color ?? ''))), ['priority' => 5]);
+        $background = $this->config->get('plugins.visual-editor.page_background', true) ? self::safeColor($settings['background']) : null;
+        $this->grav['assets']->addInlineCss(self::pageEffectCss($effect, $background), ['priority' => 5]);
     }
 
     /** The CSS of one page effect; `$background` (validated) picks particle colors that show on it. */
@@ -383,6 +360,20 @@ class VisualEditorPlugin extends Plugin
         $event['routes']->post('/visual-editor/preview', [PreviewController::class, 'preview']);
     }
 
+    /** The page settings comment is not content: keep it out of the rendered page. */
+    public function stripPageSettings(Event $event): void
+    {
+        if ($this->isAdmin() || !$this->isEnabled()) {
+            return;
+        }
+        $page = $event['page'];
+        $content = (string)$page->getRawContent();
+        $stripped = preg_replace(self::SETTINGS_COMMENT, '', $content, 1);
+        if (is_string($stripped) && $stripped !== $content) {
+            $page->setRawContent($stripped);
+        }
+    }
+
     public function addAlertStyles(Event $event): void
     {
         if ($this->isAdmin() || !$this->isEnabled() || !$this->config->get('plugins.visual-editor.frontend_alerts', false)) {
@@ -414,83 +405,9 @@ class VisualEditorPlugin extends Plugin
             } else {
                 $out[$key] = $field;
             }
-            // Page background color right below the editor (lists only: Admin2 serializes field lists).
-            if ($isList && is_array($field) && ($field['name'] ?? null) === 'content' && isset($field['visual_editor'])
-                && !$this->hasField($fields, self::BACKGROUND_FIELD) && !$this->hasField($fields, 'header.page_effect')) {
-                foreach ($this->pageFields() as $pageField) {
-                    $out[] = $pageField;
-                }
-            }
         }
 
         return $out;
-    }
-
-    /** Fields added right below the editor: page background (solid or gradient), page effect. */
-    private function pageFields(): array
-    {
-        $fields = $this->config->get('plugins.visual-editor.page_background', true) ? $this->backgroundFields() : [];
-        if ($this->config->get('plugins.visual-editor.page_effects', true)) {
-            $effects = [];
-            foreach (self::PAGE_EFFECTS as $value => $definition) {
-                $effects[] = ['value' => $value, 'label' => $this->label($definition['label'])];
-            }
-            $fields[] = [
-                'name' => 'header.page_effect',
-                'type' => 'select',
-                'label' => $this->label('Page effect'),
-                'help' => $this->label('A light decoration over the whole page on the site. Visitors who asked their system to reduce motion see it still.'),
-                'default' => 'snow',
-                'options' => $effects,
-                'toggleable' => true,
-            ];
-        }
-
-        return $fields;
-    }
-
-    private function backgroundFields(): array
-    {
-        $directions = [];
-        foreach (self::GRADIENT_DIRECTIONS as $value => $definition) {
-            $directions[] = ['value' => $value, 'label' => $this->label($definition[0])];
-        }
-
-        return [
-            [
-                'name' => self::BACKGROUND_FIELD,
-                'type' => 'colorpicker',
-                'label' => $this->label('Page background color'),
-                'help' => $this->label('Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'),
-                'toggleable' => true,
-            ],
-            [
-                'name' => 'header.background_color_2',
-                'type' => 'colorpicker',
-                'label' => $this->label('Second color (gradient)'),
-                'help' => $this->label('Turn it on for a gradient from the page background color to this one.'),
-                'toggleable' => true,
-            ],
-            [
-                'name' => 'header.background_direction',
-                'type' => 'select',
-                'label' => $this->label('Gradient direction'),
-                'default' => 'to bottom',
-                'options' => $directions,
-                'toggleable' => true,
-            ],
-        ];
-    }
-
-    private function hasField(array $fields, string $name): bool
-    {
-        foreach ($fields as $field) {
-            if (is_array($field) && ($field['name'] ?? null) === $name) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function rewriteContentFieldIn(array $fields, bool $useByDefault): array
@@ -530,6 +447,8 @@ class VisualEditorPlugin extends Plugin
             'shortcodes' => is_array($shortcodes) ? array_values($shortcodes) : [],
             'maxUploadBytes' => $this->uploadLimit(),
             'plainTables' => (bool)$config->get('plugins.visual-editor.plain_tables', false),
+            'pageBackground' => (bool)$config->get('plugins.visual-editor.page_background', true),
+            'pageEffects' => (bool)$config->get('plugins.visual-editor.page_effects', true),
         ];
     }
 

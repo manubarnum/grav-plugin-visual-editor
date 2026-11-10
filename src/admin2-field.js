@@ -10,13 +10,12 @@
  * echoes every reported value back through the `value` setter.
  */
 import { VisualEditor } from './editor.js';
-import { contrastText, gradientCss, mixColors } from './markdown.js';
 
-/** Page frontmatter field (added next to the editor by visual-editor.php) previewed as the editing surface color. */
+/** Former page frontmatter fields (before the page settings button): still honored until the button saves. */
 const PAGE_BACKGROUND = 'header.background_color';
 const PAGE_BACKGROUND_2 = 'header.background_color_2';
 const PAGE_BACKGROUND_DIRECTION = 'header.background_direction';
-const safeCssColor = /^(?:#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([\d\s.,%\/deg]+\))$/i;
+const PAGE_EFFECT = 'header.page_effect';
 
 /* global __VE_CSS__ */
 const STYLE_ID = 'grav-visual-editor-styles';
@@ -87,31 +86,15 @@ export class VisualEditorField extends HTMLElement {
     this._value = '';
     this.editor = null;
     this.uploaded = new Map();
-    // Admin2 calls formChanged() when a watched form value changes (CustomFieldWrapper.svelte).
-    this.watch = [PAGE_BACKGROUND, PAGE_BACKGROUND_2, PAGE_BACKGROUND_DIRECTION];
   }
 
-  formChanged() { this.applyPageBackground(); }
-
-  /** Preview the page background color on the editing surface, with readable text. */
-  applyPageBackground() {
-    const wrap = this.editor?.editorWrap;
-    if (!wrap) return;
+  /** Page settings from the former header fields (before the toolbar button), used until the button saves its own. */
+  legacyPageSettings() {
     const read = (path) => {
       const raw = typeof this.getValue === 'function' ? this.getValue(path) : null;
       return typeof raw === 'string' ? raw.trim() : '';
     };
-    const color = safeCssColor.test(read(PAGE_BACKGROUND)) ? read(PAGE_BACKGROUND) : '';
-    const second = color && safeCssColor.test(read(PAGE_BACKGROUND_2)) ? read(PAGE_BACKGROUND_2) : '';
-    wrap.style.background = second ? gradientCss(read(PAGE_BACKGROUND_DIRECTION), color, second) : color;
-    if (color) {
-      const text = contrastText(second ? (mixColors(color, second) || color) : color);
-      wrap.style.setProperty('--ve-text', text);
-      wrap.style.setProperty('--ve-muted', text === '#ffffff' ? 'rgba(255,255,255,.72)' : 'rgba(31,35,41,.68)');
-    } else {
-      wrap.style.removeProperty('--ve-text');
-      wrap.style.removeProperty('--ve-muted');
-    }
+    return { background: read(PAGE_BACKGROUND), background2: read(PAGE_BACKGROUND_2), direction: read(PAGE_BACKGROUND_DIRECTION), effect: read(PAGE_EFFECT) };
   }
 
   set field(field) { this._field = field || null; }
@@ -140,6 +123,7 @@ export class VisualEditorField extends HTMLElement {
       ...options,
       theme: !options.theme || options.theme === 'auto' ? (adminIsDark() ? 'dark' : 'light') : options.theme,
       resolveMediaUrl: (src) => this.resolveMedia(src),
+      legacyPageSettings: () => this.legacyPageSettings(),
     };
     const readonly = Boolean(this._field?.readonly || this._field?.disabled);
     // Set by Admin2 before connecting when collaborative editing is on (CustomFieldWrapper.svelte).
@@ -155,7 +139,6 @@ export class VisualEditorField extends HTMLElement {
       },
     });
     if (readonly) this.editor.editor.setEditable(false);
-    this.applyPageBackground();
     // Report pending edits before anything can read or save the page.
     // Listen on the editor frame: in distraction-free mode it is moved out of this element.
     this.onFocusOut = (event) => { if (!this.contains(event.relatedTarget) && !this.editor?.root.contains(event.relatedTarget)) this.flushChange(); };

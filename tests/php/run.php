@@ -58,9 +58,11 @@ function names(array $fields): array { return array_map(fn($field) => $field['na
 
 test('site default: the content field becomes the visual editor, with its client config', function () {
     $tab = contentTab(resolve(plugin(['plugins.visual-editor.toolbar' => 'bold, italic'])));
-    same(['header.title:text', 'content:visual-editor', 'header.background_color:colorpicker', 'header.background_color_2:colorpicker', 'header.background_direction:select', 'header.page_effect:select', 'header.media_order:pagemedia'], names($tab));
+    same(['header.title:text', 'content:visual-editor', 'header.media_order:pagemedia'], names($tab), 'no field added: page settings live in the editor');
     same(['bold', 'italic'], $tab[1]['visual_editor']['toolbar']);
     same(false, $tab[1]['visual_editor']['plainTables']);
+    same(true, $tab[1]['visual_editor']['pageBackground']);
+    same(true, $tab[1]['visual_editor']['pageEffects']);
 });
 
 test('a user who chose CodeMirror keeps the markdown field (config still attached)', function () {
@@ -79,27 +81,9 @@ test('site_default off: the field type is left alone', function () {
     same('markdown', contentTab(resolve(plugin(['plugins.visual-editor.site_default' => false])))[1]['type']);
 });
 
-test('the page background field never overwrites a sibling and is not duplicated', function () {
-    $plugin = plugin();
-    $once = resolve($plugin);
-    $twice = resolve($plugin, '', 'page', $once);
-    same(7, count(contentTab($twice)));
-    same('header.media_order', contentTab($twice)[6]['name']);
-});
-
-test('fields added to the page form follow the user\'s Admin2 language', function () {
-    $label = fn() => contentTab(resolve(plugin()))[2]['label'];
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'fr-FR';
-    same('Couleur de fond de la page', $label());
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'en-US';
-    same('Page background color', $label());
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
-    same('Page background color', $label(), 'no preference: English');
-});
-
-test('page_background off: no background field', function () {
-    same(['header.title:text', 'content:visual-editor', 'header.page_effect:select', 'header.media_order:pagemedia'], names(contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false])))));
-    same(['header.title:text', 'content:visual-editor', 'header.media_order:pagemedia'], names(contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false, 'plugins.visual-editor.page_effects' => false])))));
+test('page_background / page_effects off: the editor is told (its button hides what is off)', function () {
+    $config = contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false, 'plugins.visual-editor.page_effects' => false])))[1]['visual_editor'];
+    same([false, false], [$config['pageBackground'], $config['pageEffects']]);
 });
 
 test('only page blueprints are touched, and nothing when the plugin is disabled', function () {
@@ -169,17 +153,6 @@ test('the PHP contrast rule matches the shared fixture (the JS tests check the s
     }
 });
 
-test('the page form offers a gradient: second color and direction after the background color', function () {
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'fr-FR';
-    $tab = contentTab(resolve(plugin()));
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
-    same(['header.background_color', 'header.background_color_2', 'header.background_direction'], array_column(array_slice($tab, 2, 3), 'name'));
-    same('header.page_effect', $tab[5]['name'], 'nothing overwritten');
-    same('Seconde couleur (dégradé)', $tab[3]['label']);
-    same(['to bottom', 'to right', 'to bottom right', 'radial'], array_column($tab[4]['options'], 'value'));
-    same('Depuis le centre', $tab[4]['options'][3]['label']);
-});
-
 test('page background gradient: theme surfaces see through, text picked on the mix', function () {
     $css = function (array $header): string {
         $assets = new Assets();
@@ -202,18 +175,6 @@ test('mixing two colors gives the same result in PHP and JS (gradient text color
     same('#808080', VisualEditorPlugin::mixColors('#000', '#fff'));
     same('#141e28', VisualEditorPlugin::mixColors('rgb(10, 20, 30)', '#1e2832'));
     same(null, VisualEditorPlugin::mixColors('#fde2e4', 'red'));
-});
-
-test('the page form offers a page effect after the background fields, in the admin language', function () {
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'fr-FR';
-    $tab = contentTab(resolve(plugin()));
-    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
-    same('header.page_effect', $tab[5]['name']);
-    same('header.media_order', $tab[6]['name'], 'nothing overwritten');
-    same('Effet sur la page', $tab[5]['label']);
-    same(['snow', 'snow-still', 'stars', 'stars-still', 'sparkles', 'sparkles-still'], array_column($tab[5]['options'], 'value'));
-    same('Neige qui tombe', $tab[5]['options'][0]['label']);
-    same(['header.media_order'], array_column(array_slice(contentTab(resolve(plugin(['plugins.visual-editor.page_effects' => false]))), 5), 'name'), 'option off: no effect field');
 });
 
 test('page effects: CSS-only overlay that never blocks clicks, still for reduced motion, nothing otherwise', function () {
@@ -239,7 +200,41 @@ test('page effects: CSS-only overlay that never blocks clicks, still for reduced
     same('', $css(['page_effect' => 'snow'], ['plugins.visual-editor.page_effects' => false]), 'option off');
 });
 
-// --- Tables ------------------------------------------------------------------------------------------
+test('page settings: the comment written by the editor wins over the former frontmatter fields', function () {
+    $settings = fn(array $header, string $raw) => VisualEditorPlugin::pageSettings(new Page($header, $raw));
+    same(['background' => '#1d3557', 'background2' => '#6a4c93', 'direction' => 'radial', 'effect' => 'stars'],
+        $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "<!-- ve-page background=\"#1d3557\" background2=\"#6a4c93\" direction=\"radial\" effect=\"stars\" -->\n\nText\n"));
+    same(['background' => '', 'background2' => '', 'direction' => '', 'effect' => ''],
+        $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "<!-- ve-page -->\n\nText\n"), 'an empty comment turns the former fields off');
+    same(['background' => '#fff', 'background2' => '', 'direction' => '', 'effect' => 'snow'],
+        $settings(['background_color' => '#fff', 'page_effect' => 'snow'], "Text\n<!-- ve-page effect=\"stars\" -->\n"), 'only a comment opening the content counts');
+
+    $assets = new Assets();
+    plugin([], ['assets' => $assets, 'page' => new Page([], "<!-- ve-page background=\"#1d3557\" effect=\"snow\" -->\n\nText\n")])->addPageBackground();
+    ok(str_contains($assets->css[0] ?? '', '--q2-bg:#1d3557'), 'background from the comment');
+    $assets = new Assets();
+    plugin([], ['assets' => $assets, 'page' => new Page([], "<!-- ve-page background=\"#1d3557\" effect=\"snow\" -->\n\nText\n")])->addPageEffect();
+    ok(str_contains($assets->css[0] ?? '', 'rgba(255,255,255,'), 'effect from the comment, colored for its dark background');
+    $assets = new Assets();
+    plugin([], ['assets' => $assets, 'page' => new Page([], "<!-- ve-page background=\"red;}body{x\" -->\n\nText\n")])->addPageBackground();
+    same([], $assets->css, 'unsafe color in the comment ignored');
+});
+
+test('page settings: the comment is removed from the rendered content, nothing else', function () {
+    $run = function (string $raw, bool $admin = false): string {
+        $page = new Page([], $raw);
+        $plugin = plugin();
+        $plugin->admin = $admin;
+        $plugin->stripPageSettings(new Event(['page' => $page]));
+        return $page->raw;
+    };
+    same("Text\n", $run("<!-- ve-page effect=\"snow\" -->\n\nText\n"));
+    same("<!-- other -->\n\nText\n", $run("<!-- other -->\n\nText\n"));
+    same("Text\n\n<!-- ve-page -->\n", $run("Text\n\n<!-- ve-page -->\n"), 'only at the start');
+    same("<!-- ve-page -->\n\nText\n", $run("<!-- ve-page -->\n\nText\n", true), 'never in admin');
+});
+
+// --- Tables ---// --- Tables ------------------------------------------------------------------------------------------
 
 test('plain tables: site-wide option, per-table class, or no css at all', function () {
     $run = function (bool $global, string $raw): array {

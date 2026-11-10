@@ -293,29 +293,85 @@ test('colored block: wrap the selection, change its color, remove it', () => {
   el.remove();
 });
 
-test('the editing surface previews the page background color from the form', () => {
-  const form = { 'header.background_color': '#1d3557' };
+test('page settings button: background, gradient and effect kept as a hidden comment opening the content', () => {
+  const { el, changes } = mount('# Title\n\nText\n');
+  const editor = el.editor;
+  const dialog = () => editor.dialogElement;
+  const submit = () => dialog().querySelector('button[type="submit"]').click();
+  const button = editor.toolbar.querySelector('[data-action="pageSettings"]');
+  assert.ok(button, 'button in the toolbar');
+  assert.equal(button.getAttribute('aria-pressed'), 'false');
+
+  editor.command('pageSettings');
+  assert.equal(dialog().querySelector('select[name="background"]').value, 'none');
+  dialog().querySelector('select[name="background"]').value = '#1d3557';
+  dialog().querySelector('select[name="background2"]').value = 'custom';
+  dialog().querySelector('input[name="custom2"]').value = '#6a4c93';
+  dialog().querySelector('select[name="direction"]').value = 'radial';
+  dialog().querySelector('select[name="effect"]').value = 'stars';
+  submit();
+  assert.equal(changes.at(-1), '<!-- ve-page background="#1d3557" background2="#6a4c93" direction="radial" effect="stars" -->\n\n# Title\n\nText\n');
+  const wrap = editor.editorWrap;
+  assert.match(wrap.style.background, /radial-gradient/);
+  assert.equal(wrap.style.getPropertyValue('--ve-text'), '#ffffff');
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  assert.doesNotMatch(el.querySelector('.ProseMirror').textContent, /ve-page/, 'comment hidden from the visual view');
+
+  editor.setMode('source');
+  assert.equal(editor.source.value, '# Title\n\nText\n', 'comment hidden from the source view');
+  editor.source.value += '\nMore\n';
+  editor.source.dispatchEvent(new window.Event('input'));
+  assert.match(changes.at(-1), /^<!-- ve-page [^>]+ -->\n\n# Title\n\nText\n\nMore\n$/, 'kept while editing the source');
+  editor.setMode('visual');
+
+  editor.command('pageSettings');
+  assert.equal(dialog().querySelector('select[name="effect"]').value, 'stars', 'dialog shows the current settings');
+  dialog().querySelector('select[name="background"]').value = 'none';
+  dialog().querySelector('select[name="effect"]').value = 'none';
+  submit();
+  assert.equal(changes.at(-1), '# Title\n\nText\n\nMore\n', 'nothing left: no comment');
+  assert.equal(wrap.style.background, '');
+  el.remove();
+});
+
+test('page settings: an existing comment loads without marking the page changed, byte for byte', () => {
+  const markdown = '<!--  ve-page effect="snow"   background="#FDE2E4" -->\n\nText\n';
+  const { el, changes } = mount(markdown);
+  assert.equal(changes.length, 0);
+  assert.equal(el.value, markdown);
+  assert.equal(el.editor.editorWrap.style.getPropertyValue('--ve-text'), '#1f2329');
+  el.editor.editor.commands.insertContentAt(1, 'New ');
+  assert.equal(changes.at(-1), '<!--  ve-page effect="snow"   background="#FDE2E4" -->\n\nNew Text\n', 'the comment is kept as written');
+  el.remove();
+});
+
+test('page settings: former header fields are shown and overridden, even by an empty choice', () => {
+  const form = { 'header.background_color': '#EB094D42', 'header.page_effect': 'snow' };
   const el = document.createElement(tag);
   mounted.add(el);
+  const changes = [];
+  el.addEventListener('change', (event) => changes.push(event.detail));
   el.field = { name: 'content', visual_editor: {} };
   el.getValue = (path) => form[path];
   el.value = 'Text\n';
   document.body.append(el);
-  const wrap = el.editor.editorWrap;
-  assert.match(wrap.style.background, /rgb\(29, 53, 87\)|#1d3557/);
-  assert.equal(wrap.style.getPropertyValue('--ve-text'), '#ffffff');
-  form['header.background_color'] = '#fde2e4';
-  el.formChanged();
-  assert.equal(wrap.style.getPropertyValue('--ve-text'), '#1f2329');
-  form['header.background_color_2'] = '#1d3557';
-  form['header.background_direction'] = 'to right';
-  el.formChanged();
-  assert.match(wrap.style.background, /linear-gradient\(to right, (?:#fde2e4|rgb\(253, 226, 228\)), (?:#1d3557|rgb\(29, 53, 87\))\)/);
-  assert.deepEqual(el.watch, ['header.background_color', 'header.background_color_2', 'header.background_direction']);
-  delete form['header.background_color_2'];
-  form['header.background_color'] = 'red;} body {';
-  el.formChanged();
-  assert.equal(wrap.style.background, '', 'unsafe values are ignored');
+  const editor = el.editor;
+  assert.match(editor.editorWrap.style.background, /rgba\(235, 9, 77|#eb094d42/);
+  editor.command('pageSettings');
+  const background = editor.dialogElement.querySelector('select[name="background"]');
+  assert.equal(background.value, '#eb094d42', 'a color outside the presets stays selectable as it is');
+  assert.equal(editor.dialogElement.querySelector('select[name="effect"]').value, 'snow');
+  background.value = 'none';
+  editor.dialogElement.querySelector('select[name="effect"]').value = 'none';
+  editor.dialogElement.querySelector('button[type="submit"]').click();
+  assert.equal(changes.at(-1), '<!-- ve-page -->\n\nText\n');
+  assert.equal(editor.editorWrap.style.background, '');
+  el.remove();
+});
+
+test('page settings: no button when both site options are off', () => {
+  const { el } = mount('Text\n', { name: 'content', type: 'visual-editor', visual_editor: { pageBackground: false, pageEffects: false } });
+  assert.equal(el.editor.toolbar.querySelector('[data-action="pageSettings"]'), null);
   el.remove();
 });
 

@@ -4,7 +4,7 @@ export const icons = {
   undo: '↶', redo: '↷', heading: 'H', bold: 'B', italic: 'I', strike: 'S', link: '🔗', image: '▧',
   bulletList: '•≡', orderedList: '1.≡', blockquote: '❝', alert: 'ⓘ', colorBlock: '▣', alignLeft: '⇤', alignCenter: '↔', alignRight: '⇥', table: '⊞', codeBlock: '{ }',
   raw: '</>', shortcode: '[ ]', source: '⌘', more: '⋯', highlight: '▰', subscript: 'x₂', superscript: 'x²',
-  keyboard: '⌨', citation: 'C', abbreviation: 'ab', fullscreen: '⛶',
+  keyboard: '⌨', citation: 'C', abbreviation: 'ab', fullscreen: '⛶', pageSettings: '✦',
 };
 export const labels = {
   undo: 'Undo', redo: 'Redo', heading: 'Heading and paragraph', bold: 'Bold', italic: 'Italic', strike: 'Strikethrough',
@@ -12,6 +12,7 @@ export const labels = {
   blockquote: 'Blockquote', alert: 'GitHub-style alert', colorBlock: 'Colored block (background color)', alignLeft: 'Align left', alignCenter: 'Center', alignRight: 'Align right', table: 'Insert or edit table', codeBlock: 'Code block',
   raw: 'HTML or Twig block', shortcode: 'Insert shortcode', source: 'Markdown source', more: 'More formatting',
   highlight: 'Highlight', subscript: 'Subscript', superscript: 'Superscript', keyboard: 'Keyboard text', citation: 'Citation', abbreviation: 'Abbreviation',
+  pageSettings: 'Page background and effects',
 };
 /** Where shortcode-backed blocks may be created: their tags must start a line (not inside a list or quote). */
 export const shortcodeContainers = ['doc', 'colorBlock', 'alignBlock'];

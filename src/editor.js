@@ -1,6 +1,6 @@
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions, documentToMarkdown, markdownToHtml } from './extensions.js';
-import { detectMarkdownStyle, escapeHtml, imageWidth } from './markdown.js';
+import { detectMarkdownStyle, escapeHtml, imageWidth, splitPageSettings } from './markdown.js';
 import { defaults, element, icons, labels, messages } from './editor/ui.js';
 import { detectLocale, setLocale, t } from './i18n.js';
 import { canSharedRedo, canSharedUndo, collaborationExtension, sharedRedo, sharedUndo, startCollaboration } from './collab.js';
@@ -8,10 +8,11 @@ import { blockMethods } from './editor/blocks.js';
 import { dialogMethods } from './editor/dialog.js';
 import { imageMethods } from './editor/images.js';
 import { tableMethods } from './editor/tables.js';
+import { pageMethods } from './editor/page.js';
 
 export { markdownSnippet } from './editor/ui.js';
 
-export const defaultConfig = { theme: 'auto', smartTypography: true, shortcodePreviews: true, toolbar: defaults, maxUploadBytes: 10485760, shortcodes: [] };
+export const defaultConfig = { theme: 'auto', smartTypography: true, shortcodePreviews: true, toolbar: defaults, maxUploadBytes: 10485760, shortcodes: [], pageBackground: true, pageEffects: true };
 
 /**
  * Host-agnostic editor. The host owns persistence: it passes the initial Markdown, gets every
@@ -36,13 +37,16 @@ export class VisualEditor {
     setLocale(config.locale || detectLocale());
     this.mode = 'visual';
     this.markdown = String(markdown ?? '');
+    // Page settings (`<!-- ve-page … -->` opening the content) stay out of both editing views.
+    const { settings, prefix, body } = splitPageSettings(this.markdown);
+    this.pageSettings = settings; this.pagePrefix = prefix;
     // The page's own conventions (bullets, emphasis, headings…), reused when saving.
-    this.markdownStyle = detectMarkdownStyle(this.markdown);
+    this.markdownStyle = detectMarkdownStyle(body);
     this.onKeydown = (event) => { if (event.key === 'Escape' && this.dialogElement) this.closeDialog(); };
     this.buildShell();
     // Shared undo history replaces TipTap's own when collaborating (y-prosemirror requirement).
     const extensions = createExtensions({ ...this.config, history: !collaboration });
-    let content = this.toHtml(this.markdown);
+    let content = this.toHtml(body);
     if (collaboration) {
       const { doc, mapping } = startCollaboration(collaboration, getSchema(extensions), content);
       extensions.push(collaborationExtension(collaboration, mapping));
@@ -63,8 +67,9 @@ export class VisualEditor {
       onTransaction: () => this.updateToolbar(),
     });
     // Joining a session shows the shared document, which may differ from the form's value.
-    if (collaboration) this.markdown = documentToMarkdown(this.editor.state.doc, this.markdownStyle);
+    if (collaboration) this.markdown = this.pagePrefix + documentToMarkdown(this.editor.state.doc, this.markdownStyle);
     this.bindEvents();
+    this.paintPage();
     this.updateCount();
     this.updateToolbar();
     this.emit('ready', { editor: this, tiptap: this.editor });
@@ -100,13 +105,19 @@ export class VisualEditor {
     const value = String(markdown ?? '');
     if (value === this.markdown) return;
     this.markdown = value;
-    this.markdownStyle = detectMarkdownStyle(value);
-    if (this.mode === 'source') this.source.value = value;
-    else this.editor.commands.setContent(this.toHtml(value), false);
+    const { settings, prefix, body } = splitPageSettings(value);
+    this.pageSettings = settings; this.pagePrefix = prefix;
+    this.markdownStyle = detectMarkdownStyle(body);
+    if (this.mode === 'source') this.source.value = body;
+    else this.editor.commands.setContent(this.toHtml(body), false);
+    this.paintPage();
     this.updateCount();
   }
 
   getMarkdown() { return this.markdown; }
+
+  /** The content without the page settings comment (what both editing views show). */
+  bodyMarkdown() { return this.markdown.slice(this.pagePrefix.length); }
 
   /** Insert a Markdown snippet at the cursor (e.g. from Admin2's media panel). */
   insertMarkdown(snippet) {
@@ -158,6 +169,7 @@ export class VisualEditor {
       previousGroup = group;
       this.toolbar.append(this.toolButton(name));
     });
+    if ((this.config.pageBackground !== false || this.config.pageEffects !== false) && !tools.includes('pageSettings')) this.toolbar.append(this.toolButton('pageSettings'));
     this.toolbar.append(this.toolButton('more'));
     this.tableBar = element('div', 've-tablebar'); this.tableBar.hidden = true;
     const tableCommands = [
@@ -220,6 +232,7 @@ export class VisualEditor {
       case 'blockquote': return chain().toggleBlockquote().run();
       case 'alert': return this.alertDialog();
       case 'colorBlock': return this.colorBlockDialog();
+      case 'pageSettings': return this.pageSettingsDialog();
       case 'alignLeft': return this.setAlignment('left');
       case 'alignCenter': return this.setAlignment('center');
       case 'alignRight': return this.setAlignment('right');
@@ -306,11 +319,11 @@ export class VisualEditor {
   setMode(mode) {
     if (mode === this.mode) return;
     if (mode === 'source') {
-      this.source.value = this.markdown;
+      this.source.value = this.bodyMarkdown();
       this.content.hidden = true; this.source.hidden = false;
     } else {
       // Switching views must not rewrite the Markdown by itself: only a real edit re-serializes.
-      this.editor.commands.setContent(this.toHtml(this.markdown), false);
+      this.editor.commands.setContent(this.toHtml(this.bodyMarkdown()), false);
       this.content.hidden = false; this.source.hidden = true;
       this.editor.commands.focus('end');
     }
@@ -329,7 +342,7 @@ export class VisualEditor {
 
   /** Called on user edits only; reports the Markdown to the host when it actually changed. */
   sync() {
-    const markdown = this.mode === 'source' ? this.source.value : documentToMarkdown(this.editor.state.doc, this.markdownStyle);
+    const markdown = this.pagePrefix + (this.mode === 'source' ? this.source.value : documentToMarkdown(this.editor.state.doc, this.markdownStyle));
     if (markdown === this.markdown) return;
     this.markdown = markdown;
     this.updateCount();
@@ -386,4 +399,4 @@ export class VisualEditor {
 }
 
 // Feature areas live in src/editor/*.js; their methods are part of the class API.
-Object.assign(VisualEditor.prototype, blockMethods, tableMethods, imageMethods, dialogMethods);
+Object.assign(VisualEditor.prototype, blockMethods, tableMethods, imageMethods, dialogMethods, pageMethods);
