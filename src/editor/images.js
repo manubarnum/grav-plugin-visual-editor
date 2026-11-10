@@ -6,7 +6,23 @@ import { t } from '../i18n.js';
 export const imageMethods = {
   selectedImage() {
     const { selection } = this.editor.state;
-    return selection.node?.type.name === 'image' ? { node: selection.node, pos: selection.from } : null;
+    return ['image', 'inlineImage'].includes(selection.node?.type.name) ? { node: selection.node, pos: selection.from } : null;
+  },
+
+  /** Insert an image at the cursor: inline in a table cell (one line of text in Markdown), else a block. */
+  insertImage(attrs) {
+    const chain = this.editor.chain().focus();
+    if (this.editor.isActive('table')) chain.insertContent({ type: 'inlineImage', attrs }).run();
+    else chain.setImage(attrs).run();
+  },
+
+  /** The table cell at a document position, if any. */
+  cellAt(pos) {
+    const $pos = this.editor.state.doc.resolve(pos);
+    for (let depth = $pos.depth; depth > 0; depth -= 1) {
+      if (['tableCell', 'tableHeader'].includes($pos.node(depth).type.name)) return $pos.node(depth);
+    }
+    return null;
   },
 
   updateImage(attributes) {
@@ -90,11 +106,11 @@ export const imageMethods = {
       { name: 'alt', label: 'Alternative text', required: true, value: item.alt || item.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') },
       { name: 'title', label: 'Title (optional)' },
       { name: 'src', label: 'Markdown path', value: item.path, required: true },
-    ], ({ alt, title, src }) => this.editor.chain().focus().setImage({ src, alt, title: title || null }).run());
+    ], ({ alt, title, src }) => this.insertImage({ src, alt, title: title || null }));
   },
 
   dropFiles(event, moved) {
-    if (moved) return false;
+    if (moved) return this.moveImageIntoCell(event);
     const transfer = event.dataTransfer;
     if (transfer?.files?.length) {
       event.preventDefault();
@@ -110,6 +126,27 @@ export const imageMethods = {
     try { target = this.editor.view.posAtCoords({ left: event.clientX, top: event.clientY }); } catch { /* no layout: keep the cursor */ }
     if (target) this.editor.commands.setTextSelection(target.pos);
     this.insertMarkdown(snippet);
+    return true;
+  },
+
+  /**
+   * Moving an image into a table cell: a cell holds inline content only, so the image is moved as an
+   * inline image at the drop point (ProseMirror alone would put the block image beside the table).
+   */
+  moveImageIntoCell(event) {
+    const image = this.selectedImage();
+    if (!image) return false;
+    let target = null;
+    try { target = this.editor.view.posAtCoords({ left: event.clientX, top: event.clientY }); } catch { return false; }
+    if (!target || !this.cellAt(target.pos)) return false;
+    event.preventDefault();
+    const { schema } = this.editor.state;
+    const node = schema.nodes.inlineImage.create(image.node.attrs);
+    this.editor.chain().focus().command(({ tr }) => {
+      tr.delete(image.pos, image.pos + image.node.nodeSize);
+      tr.insert(tr.mapping.map(target.pos), node);
+      return true;
+    }).run();
     return true;
   },
 
@@ -132,7 +169,7 @@ export const imageMethods = {
       try {
         const item = await this.services.upload(file);
         if (!item) continue;
-        this.editor.chain().focus().setImage({ src: item.path, alt: item.alt || file.name.replace(/\.[^.]+$/, '') }).run();
+        this.insertImage({ src: item.path, alt: item.alt || file.name.replace(/\.[^.]+$/, '') });
         this.notify('Image uploaded and inserted.');
       } catch (error) { this.notify(error.message, true); }
     }

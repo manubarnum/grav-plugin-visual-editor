@@ -202,6 +202,9 @@ export function addMediaAttributes(html, pageMediaUrl = '') {
     // Images that share their paragraph with text (or sit in a link) stay inline in that paragraph.
     else paragraph.querySelectorAll('img').forEach((img) => img.setAttribute('data-ve-inline', ''));
   });
+  // A table cell holds one line of inline content: its images are inline (a block image was lifted
+  // out of the table, and lost inside a table style block).
+  template.content.querySelectorAll('td img, th img').forEach((img) => img.setAttribute('data-ve-inline', ''));
   template.content.querySelectorAll('img').forEach((img) => {
     img.setAttribute('data-markdown-src', img.getAttribute('src') || '');
     img.setAttribute('alt', img.getAttribute('alt') || '');

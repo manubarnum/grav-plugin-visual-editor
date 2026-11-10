@@ -9,6 +9,7 @@
     * Page background and effect are set with the ✦ toolbar button (also in distraction-free mode), kept as a `<!-- ve-page … -->` comment opening the content; the former fields under the editor are gone (their values still apply until the button is used)
 1. [](#bugfix)
     * Table cells: headings and several paragraphs were saved as `## text` and glued paragraphs; a cell now holds text only, Enter adds a line break (`<br>`), pasted headings or lists become text, and in a table the heading button makes a cell subheading: the current line in bold (`**Subheading**<br>Text`)
+    * Images in table cells (broken by the one-line cells above: lifted out of the table, lost inside a table style block) are inline images in their cell again; a photo dragged into a cell, or inserted/uploaded with the cursor in a cell, goes in the cell; the image bar works on them
     * Selecting text near a table made the editing area jump: the table and image bars now float above the table or image instead of pushing the text down (their text no longer takes the page background's text color)
 1. [](#improved)
     * Toolbar in five groups (history, text, blocks, table and alignment, image and colors) with drawn SVG icons of one size instead of text symbols

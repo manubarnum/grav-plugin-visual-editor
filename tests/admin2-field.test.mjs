@@ -915,3 +915,32 @@ test('table cells: Enter makes a line break; the heading button makes a cell sub
   assert.equal(changes.at(-1), '| A |\n| --- |\n| **Title**<br>body |\n', 'again: back to plain');
   el.remove();
 });
+
+test('images and table cells: insert in a cell, move a photo into a cell, image bar on a cell image', () => {
+  const { el, changes } = mount('![Photo](p.jpg)\n\n| A | B |\n| --- | --- |\n| one | two |\n');
+  const editor = el.editor;
+  const find = (text) => { let at = 0; editor.editor.state.doc.descendants((node, pos) => { if (!at && node.isText && node.text.includes(text)) at = pos + node.text.indexOf(text) + 1; }); return at; };
+  // Move the block photo into the cell "two" (drop point stubbed: jsdom has no layout).
+  let photo = -1;
+  editor.editor.state.doc.descendants((node, pos) => { if (photo < 0 && node.type.name === 'image') photo = pos; });
+  editor.editor.commands.setNodeSelection(photo);
+  const target = find('two') + 2; // end of "two"
+  editor.editor.view.posAtCoords = () => ({ pos: target, inside: -1 });
+  const event = new window.Event('drop', { cancelable: true });
+  Object.assign(event, { clientX: 1, clientY: 1 });
+  assert.equal(editor.dropFiles(event, true), true, 'handled');
+  assert.equal(changes.at(-1), '| A | B |\n| --- | --- |\n| one | two![Photo](p.jpg) |\n');
+
+  // Insert from the media dialog with the cursor in a cell.
+  editor.editor.commands.setTextSelection(find('one') + 2); // end of "one"
+  editor.insertImage({ src: 'q.jpg', alt: 'Q', title: null });
+  assert.equal(changes.at(-1), '| A | B |\n| --- | --- |\n| one![Q](q.jpg) | two![Photo](p.jpg) |\n');
+
+  // Image bar on an image in a cell.
+  let cellImage = -1;
+  editor.editor.state.doc.descendants((node, pos) => { if (cellImage < 0 && node.type.name === 'inlineImage') cellImage = pos; });
+  editor.editor.commands.setNodeSelection(cellImage);
+  editor.setImageWidth(320);
+  assert.match(changes.at(-1), /one!\[Q\]\(q\.jpg\?cropResize=320\)/);
+  el.remove();
+});

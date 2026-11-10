@@ -129,7 +129,9 @@ export class VisualEditor {
       this.sync();
       return;
     }
-    this.editor.chain().focus().insertContent(this.toHtml(text)).run();
+    // In a table cell, images go inline (a cell holds one line of inline content).
+    const html = this.editor.isActive('table') ? this.toHtml(text).replace(/<img /g, '<img data-ve-inline ') : this.toHtml(text);
+    this.editor.chain().focus().insertContent(html).run();
   }
 
   destroy() {

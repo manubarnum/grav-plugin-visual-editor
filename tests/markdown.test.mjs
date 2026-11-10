@@ -273,3 +273,11 @@ test('table cells stay one line: paragraphs and line breaks become <br>, pasted 
   editor.destroy();
   assert.equal(markdown, '| A | B |\n| --- | --- |\n| Title<br>First<br>Second | item |\n');
 });
+
+test('images in table cells stay in their cell (inline), with or without a table style', () => {
+  for (const source of [
+    '| A | B |\n| --- | --- |\n| text | ![Photo](p.jpg?cropResize=339) |\n',
+    '| A |\n| --- |\n| x ![Photo](p.jpg) y |\n',
+    '[div class="ve-table-plain"]\n\n| A | B |\n| --- | --- |\n| text | ![Foulees](f.jpg "Clio") |\n\n[/div]\n',
+  ]) assert.equal(roundTrip(source), source);
+});
