@@ -169,6 +169,7 @@ test('plain tables: site-wide option, per-table class, or no css at all', functi
     same([], $run(false, 'No tables here.'));
     ok(str_contains($run(false, "[div class=\"ve-table-plain\"]\n\n| a |\n\n[/div]")[0] ?? '', '.ve-table-plain table'), 'per-table css');
     ok(str_contains($run(true, '')[0] ?? '', 'table:not(.ve-table-normal table)'), 'site-wide css keeps normal tables');
+    ok(str_contains($run(true, '')[0], 'th{font-weight:inherit!important}'), 'plain tables: the header row is not bold');
 });
 
 // --- Front-end alerts --------------------------------------------------------------------------------

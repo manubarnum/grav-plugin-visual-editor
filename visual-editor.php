@@ -122,7 +122,9 @@ class VisualEditorPlugin extends Plugin
     public static function plainTableCss(string $table): string
     {
         return "{$table}{--pico-table-row-stripped-background-color:transparent;--pico-table-border-color:transparent;background:transparent!important;border:0!important}"
-            . "{$table} :is(thead,tbody,tfoot,tr,th,td){background:transparent!important;border:0!important;box-shadow:none!important}";
+            . "{$table} :is(thead,tbody,tfoot,tr,th,td){background:transparent!important;border:0!important;box-shadow:none!important}"
+            // Markdown always makes the first row a header; in a plain (layout) table it reads as ordinary text.
+            . "{$table} th{font-weight:inherit!important}";
     }
 
     /** A CSS color we can safely print: hex, rgb[a]() or hsl[a]() with plain numbers only. */

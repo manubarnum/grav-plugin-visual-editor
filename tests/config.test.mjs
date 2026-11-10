@@ -37,3 +37,8 @@ test('the toolbar default is the same in the YAML, the blueprint description and
 test('the JS contrast rule matches the shared fixture (the PHP tests check the same file)', () => {
   for (const { color, text } of JSON.parse(read('tests/fixtures/contrast.json'))) assert.equal(contrastText(color), text, color);
 });
+
+test('plain tables do not show their header row in bold in the editor', () => {
+  const css = read('assets/css/editor.css');
+  assert.match(css, /\.ve-table-style\[data-style=plain\] th[^{]*\{[^}]*font-weight:inherit/);
+});
