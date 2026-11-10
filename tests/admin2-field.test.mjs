@@ -893,17 +893,25 @@ test('preview HTML is sanitized before display', async () => {
   assert.equal(holder.innerHTML, '<p>Ok <a>l</a></p>');
 });
 
-test('table cells: Enter makes a line break, the heading button explains instead of breaking the cell', () => {
+test('table cells: Enter makes a line break; the heading button makes a cell subheading (the line in bold)', () => {
   const { el, changes } = mount('| A | B |\n| --- | --- |\n| one | x |\n');
   const editor = el.editor;
-  let cell = 0;
-  editor.editor.state.doc.descendants((node, pos) => { if (!cell && node.isText && node.text === 'one') cell = pos + 3; });
-  editor.editor.commands.setTextSelection(cell);
-  editor.editor.commands.splitBlock();
-  editor.editor.commands.insertContent('two');
-  assert.equal(changes.at(-1), '| A | B |\n| --- | --- |\n| one<br>two | x |\n');
+  const find = (text) => { let at = 0; editor.editor.state.doc.descendants((node, pos) => { if (!at && node.isText && node.text.includes(text)) at = pos + node.text.indexOf(text) + 1; }); return at; };
+  editor.editor.commands.setTextSelection(find('one') + 2);
   editor.command('heading');
   assert.ok(!editor.dialogElement, 'no heading dialog in a table');
-  assert.match(editor.status.textContent, /une ligne de texte|one line of text/);
+  assert.equal(changes.at(-1), '| A | B |\n| --- | --- |\n| **one** | x |\n', 'the line goes bold');
+  editor.editor.commands.setTextSelection(find('one') + 3);
+  editor.editor.commands.splitBlock();
+  editor.editor.commands.unsetBold();
+  editor.editor.commands.insertContent('text below');
+  assert.equal(changes.at(-1), '| A | B |\n| --- | --- |\n| **one**<br>text below | x |\n', 'Enter, then the text below');
+
+  el.editor.setMarkdown('| A |\n| --- |\n| **Title**<br>body |\n');
+  editor.editor.commands.setTextSelection(find('body') + 1);
+  editor.command('heading');
+  assert.equal(changes.at(-1), '| A |\n| --- |\n| **Title**<br>**body** |\n', 'only the line around the cursor');
+  editor.command('heading');
+  assert.equal(changes.at(-1), '| A |\n| --- |\n| **Title**<br>body |\n', 'again: back to plain');
   el.remove();
 });

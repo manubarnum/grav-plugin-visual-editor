@@ -255,7 +255,8 @@ export class VisualEditor {
   }
 
   heading() {
-    if (this.editor.isActive('table')) return this.notify('A table cell holds one line of text in Markdown: no heading there. Use bold, or a line break (Enter).', true);
+    // A Markdown table cell holds no heading: there the button makes a cell subheading (the line in bold).
+    if (this.editor.isActive('table')) return this.cellSubheading();
     this.dialog('Text style', [
       { name: 'style', label: 'Style', type: 'select', options: [['paragraph', 'Paragraph'], [1, 'Heading 1'], [2, 'Heading 2'], [3, 'Heading 3'], [4, 'Heading 4'], [5, 'Heading 5'], [6, 'Heading 6']], value: this.editor.isActive('heading') ? this.editor.getAttributes('heading').level : 'paragraph' },
     ], ({ style }) => {
@@ -377,9 +378,9 @@ export class VisualEditor {
       if (name === 'redo') button.disabled = !(this.collaboration ? canSharedRedo(this.editor.state) : this.editor.can().redo());
       if (name === 'colorBlock') button.setAttribute('aria-pressed', String(colorBlock));
       if (name === 'heading') {
-        // A Markdown table cell is one line of text: no heading there (the button says why).
-        button.disabled = inTable;
-        button.title = t(inTable ? 'No heading in a table cell (one line of text in Markdown)' : labels.heading);
+        const label = t(inTable ? 'Cell subheading: the current line in bold (Enter, then the text below)' : labels.heading);
+        button.title = label; button.setAttribute('aria-label', label);
+        button.setAttribute('aria-pressed', String(inTable && this.cellLineIsBold()));
       }
       if (name.startsWith('align')) button.setAttribute('aria-pressed', String(alignment === name.slice(5).toLowerCase()));
     });

@@ -61,4 +61,46 @@ export const tableMethods = {
     if (command.startsWith('align')) return chain.setCellAttribute('align', command.slice(5).toLowerCase()).run();
     return chain[command]().run();
   },
+
+  /** The line around the cursor in a table cell paragraph: between hard breaks, or the whole paragraph. */
+  cellLine() {
+    const { $from } = this.editor.state.selection;
+    const paragraph = $from.parent;
+    if (!paragraph.isTextblock) return null;
+    const start = $from.start();
+    let from = start;
+    let to = start + paragraph.content.size;
+    paragraph.forEach((child, offset) => {
+      if (child.type.name !== 'hardBreak') return;
+      const at = start + offset;
+      if (at < $from.pos) from = at + 1;
+      else if (at < to) to = at;
+    });
+    return { from, to };
+  },
+
+  cellLineIsBold() {
+    const line = this.cellLine();
+    if (!line || line.from === line.to) return false;
+    const bold = this.editor.schema.marks.bold;
+    let all = true;
+    this.editor.state.doc.nodesBetween(line.from, line.to, (node) => { if (node.isText && !bold.isInSet(node.marks)) all = false; });
+    return all;
+  },
+
+  /**
+   * Cell subheading: a Markdown cell holds no heading, so the current line goes bold (or back to plain);
+   * Enter then starts the text below, saved as `**Subheading**<br>Text`.
+   */
+  cellSubheading() {
+    const line = this.cellLine();
+    if (!line || line.from === line.to) return this.notify('Write the subheading first, then click again.', true);
+    const bold = this.editor.schema.marks.bold;
+    const remove = this.cellLineIsBold();
+    this.editor.chain().focus().command(({ tr }) => {
+      if (remove) tr.removeMark(line.from, line.to, bold);
+      else tr.addMark(line.from, line.to, bold.create());
+      return true;
+    }).run();
+  },
 };
