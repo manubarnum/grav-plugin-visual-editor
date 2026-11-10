@@ -24,7 +24,7 @@ export default {
   'Insert shortcode': 'Insérer un shortcode',
   'Markdown source': 'Source Markdown',
   'More formatting': 'Autres mises en forme',
-  Highlight: 'Surligner',
+  Highlight: 'Surlignage',
   Subscript: 'Indice',
   Superscript: 'Exposant',
   'Keyboard text': 'Touche clavier',
@@ -64,13 +64,7 @@ export default {
   'Title (optional)': 'Titre (facultatif)',
   'Expanded meaning': 'Signification complète',
   'Inline HTML formatting': 'Mise en forme HTML en ligne',
-  Format: 'Format',
-  'Highlight — <mark>': 'Surlignage — <mark>',
-  'Keyboard — <kbd>': 'Touche clavier — <kbd>',
-  'Citation — <cite>': 'Titre d’œuvre — <cite>',
-  'Subscript — <sub>': 'Indice — <sub>',
-  'Superscript — <sup>': 'Exposant — <sup>',
-  'Abbreviation — <abbr>': 'Abréviation — <abbr>',
+  'Example text': 'Texte d’exemple',
 
   // Alerts
   'Insert alert': 'Insérer une alerte',

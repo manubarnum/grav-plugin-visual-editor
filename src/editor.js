@@ -272,10 +272,36 @@ export class VisualEditor {
     });
   }
 
+  /** Inline HTML formats, each previewed on the selected text; a click applies it. */
   more() {
-    this.dialog('Inline HTML formatting', [
-      { name: 'format', label: 'Format', type: 'select', options: [['highlight', 'Highlight — <mark>'], ['keyboard', 'Keyboard — <kbd>'], ['citation', 'Citation — <cite>'], ['subscript', 'Subscript — <sub>'], ['superscript', 'Superscript — <sup>'], ['abbreviation', 'Abbreviation — <abbr>']] },
-    ], ({ format }) => this.command(format));
+    const { from, to } = this.editor.state.selection;
+    const selected = this.editor.state.doc.textBetween(from, to, ' ').trim();
+    const text = selected ? (selected.length > 40 ? `${selected.slice(0, 39)}…` : selected) : t('Example text');
+    const formats = [
+      ['highlight', 'Highlight', 'mark'], ['keyboard', 'Keyboard text', 'kbd'], ['citation', 'Citation', 'cite'],
+      ['abbreviation', 'Abbreviation', 'abbr'], ['subscript', 'Subscript', 'sub'], ['superscript', 'Superscript', 'sup'],
+    ];
+    this.dialog('Inline HTML formatting', [], () => {});
+    const form = this.dialogElement.querySelector('form');
+    form.replaceChildren();
+    const grid = element('div', 've-format-grid');
+    formats.forEach(([format, name, tag]) => {
+      const option = this.button(`format-${format}`, name, () => { this.closeDialog(); this.command(format); }, false);
+      option.classList.add('ve-format-option');
+      option.textContent = '';
+      // The selection rendered with the format itself; sub/sup after an "x" so the shift shows.
+      const sample = element('span', 've-format-sample', ['sub', 'sup'].includes(tag) ? 'x' : '');
+      const preview = element(tag, '', text);
+      if (tag === 'abbr') preview.title = t('Expanded meaning');
+      sample.append(preview);
+      option.append(element('span', 've-format-name', t(name)), sample, element('code', 've-format-tag', `<${tag}>`));
+      grid.append(option);
+    });
+    const cancel = this.button('cancel', 'Cancel', () => this.closeDialog());
+    const actions = element('div', 've-dialog-actions');
+    actions.append(cancel);
+    form.append(grid, actions);
+    requestAnimationFrame(() => grid.querySelector('button')?.focus());
   }
 
   setMode(mode) {

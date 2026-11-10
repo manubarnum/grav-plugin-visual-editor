@@ -191,8 +191,7 @@ test('More formatting applies every inline HTML format, including the chained ab
     const editor = el.editor;
     editor.editor.commands.setTextSelection({ from: 7, to: 12 });
     editor.more();
-    editor.dialogElement.querySelector('select[name="format"]').value = format;
-    editor.dialogElement.querySelector('button[type="submit"]').click();
+    editor.dialogElement.querySelector(`[data-action="format-${format}"]`).click();
     if (format === 'abbreviation') {
       assert.ok(editor.dialogElement, 'the abbreviation dialog stays open');
       editor.dialogElement.querySelector('input[name="title"]').value = 'Expanded';
@@ -201,6 +200,24 @@ test('More formatting applies every inline HTML format, including the chained ab
     assert.equal(changes.at(-1), `Hello ${html}\n`, format);
     el.remove();
   }
+});
+
+test('More formatting previews each format on the selected text', () => {
+  const { el } = mount('Hello world\n');
+  const editor = el.editor;
+  editor.editor.commands.setTextSelection({ from: 7, to: 12 });
+  editor.more();
+  const sample = (format, tag) => editor.dialogElement.querySelector(`[data-action="format-${format}"] .ve-format-sample ${tag}`);
+  for (const [format, tag] of [['highlight', 'mark'], ['keyboard', 'kbd'], ['citation', 'cite'], ['subscript', 'sub'], ['superscript', 'sup'], ['abbreviation', 'abbr']]) {
+    assert.equal(sample(format, tag)?.textContent, 'world', format);
+  }
+  assert.equal(editor.dialogElement.querySelector('button[type="submit"]'), null, 'a click applies: no Apply button');
+  editor.closeDialog();
+
+  editor.editor.commands.setTextSelection(3); // no selection: example text
+  editor.more();
+  assert.equal(sample('highlight', 'mark').textContent, 'Example text');
+  editor.closeDialog();
 });
 
 test('resizing an image: presets, original size, custom width, details and the drag handle', () => {
