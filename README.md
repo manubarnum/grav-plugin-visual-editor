@@ -9,11 +9,12 @@ An independent, open-source visual Markdown editor for **Grav 2 and Admin2**. It
 - Keeps the page's own Markdown conventions when saving (`*` or `-` bullets, `_em_`, setext headings, `1)`, `***`, two-space line breaks, `<autolinks>`, tables without outer pipes), reference-style links and their definitions, footnotes, and images inside sentences.
 - Provides headings, inline formatting, links, images, lists, blockquotes and fenced code blocks.
 - Includes visual Markdown tables with row/column insertion, removal, alignment and cell merging; any table can be shown without background or borders.
+- Keeps table cells valid Markdown (one line each): Enter adds a line break (`<br>`), the heading button makes a bold cell subheading (`**Subheading**<br>Text`), and images can be dropped, inserted and resized inside cells. The table and image bars float above the table or image, so the text never moves.
 - Aligns blocks left, center or right (shortcode-core's `[center]`/`[right]`), and wraps blocks in a colored frame (`[div class="ve-block" style="…"]`) with readable text on any background.
-- Resizes images by dragging or with 320/640/960 px presets: Grav serves a resized copy (`photo.jpg?cropResize=640`).
+- Resizes images by dragging their corner handle or with 320/640/960 px presets: Grav serves a resized copy (`photo.jpg?cropResize=640`); GIF and SVG files, which Grav never resizes, get a display width instead (`anim.gif?resize=320`, GIFs stay animated).
 - Inserts and previews GitHub-style `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION` alerts.
 - Uses Admin2's page media: pick, upload, paste or drop images; the media panel's insert button inserts at the cursor.
-- Has visual/source modes, undo/redo, a draggable block handle, follows Admin2's light/dark mode, and optional smart typography.
+- Has a toolbar in five groups with drawn icons (history · text · blocks · table and alignment · image and colors), each button can be hidden from the plugin settings; visual/source modes, distraction-free mode, undo/redo, a draggable block handle, Admin2's light/dark mode and optional smart typography.
 - Supports abbreviation, citation, highlight, keyboard, superscript and subscript inline HTML.
 - Renders shortcode previews on demand through `shortcode-core`.
 - Adds a per-page background color or two-color gradient (✦ toolbar button), applied to the whole page on the site with readable text; colored blocks can use a gradient too.
