@@ -63,7 +63,44 @@ class VisualEditorPlugin extends Plugin
         $useByDefault = (bool)$this->config->get('plugins.visual-editor.site_default', true)
             && in_array($preference, ['', 'default', self::FIELD_TYPE], true);
 
+        $this->labelLanguage = $this->adminLanguage($user);
         $event['fields'] = $this->rewriteContentField($event['fields'], $useByDefault);
+    }
+
+    /** Labels of the fields this plugin adds to the page form, by Admin2 language (English is the key). */
+    private const LABELS = [
+        'fr' => [
+            'Page background color' => 'Couleur de fond de la page',
+            'Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'
+                => 'Fond de cette page sur le site. Désactivé, la page garde le fond du thème ; la couleur du texte s’adapte automatiquement.',
+        ],
+    ];
+
+    /** Language of the labels added to the page form, set per blueprint request. */
+    private string $labelLanguage = 'en';
+
+    private function label(string $english): string
+    {
+        return self::LABELS[$this->labelLanguage][$english] ?? $english;
+    }
+
+    /**
+     * The user's Admin2 interface language (e.g. "fr" for fr-FR). The API translates its own labels with
+     * it, but fields added here arrive after that pass, so they are translated by label() instead.
+     */
+    private function adminLanguage($user): string
+    {
+        $resolver = 'Grav\\Plugin\\Api\\Services\\PreferencesResolver';
+        if (!$user || !class_exists($resolver)) {
+            return 'en';
+        }
+        try {
+            $language = (new $resolver($this->grav))->resolve($user, false)['effective']['adminLanguage'] ?? '';
+        } catch (\Throwable $e) {
+            return 'en';
+        }
+
+        return strtolower(substr((string)$language, 0, 2)) ?: 'en';
     }
 
     /** Front end: paint the page with its `background_color` (frontmatter), text color picked for contrast. */
@@ -209,8 +246,8 @@ class VisualEditorPlugin extends Plugin
                 $out[] = [
                     'name' => self::BACKGROUND_FIELD,
                     'type' => 'colorpicker',
-                    'label' => 'Page background color',
-                    'help' => 'Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.',
+                    'label' => $this->label('Page background color'),
+                    'help' => $this->label('Background of this page on the site. Leave it off to use the theme background; the text color adapts automatically.'),
                     'toggleable' => true,
                 ];
             }

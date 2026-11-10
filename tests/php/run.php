@@ -87,6 +87,16 @@ test('the page background field never overwrites a sibling and is not duplicated
     same('header.media_order', contentTab($twice)[3]['name']);
 });
 
+test('fields added to the page form follow the user\'s Admin2 language', function () {
+    $label = fn() => contentTab(resolve(plugin()))[2]['label'];
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'fr-FR';
+    same('Couleur de fond de la page', $label());
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = 'en-US';
+    same('Page background color', $label());
+    \Grav\Plugin\Api\Services\PreferencesResolver::$adminLanguage = null;
+    same('Page background color', $label(), 'no preference: English');
+});
+
 test('page_background off: no background field', function () {
     same(['header.title:text', 'content:visual-editor', 'header.media_order:pagemedia'], names(contentTab(resolve(plugin(['plugins.visual-editor.page_background' => false])))));
 });
