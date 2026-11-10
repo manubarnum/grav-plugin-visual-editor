@@ -17,7 +17,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { marked } from 'marked';
 import { t } from './i18n.js';
-import { alertKinds, addMediaAttributes, colorFromOpen, referenceDefinitions, resolveReferences, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
+import { alertKinds, addMediaAttributes, colorFromOpen, gradientCss, gradientFromOpen, mixColors, referenceDefinitions, resolveReferences, contrastText, documentToMarkdown, escapeHtml, githubAlerts, imageWidth, markdownTables, protectBlocks, protectInline, withImageWidth } from './markdown.js';
 
 marked.setOptions({ gfm: true, breaks: false });
 
@@ -238,6 +238,7 @@ const ColorBlock = Node.create({
     return {
       open: { default: '' },
       color: { default: '#fde2e4' },
+      gradient: { default: null }, // { to, direction } or null
     };
   },
   parseHTML() {
@@ -245,13 +246,15 @@ const ColorBlock = Node.create({
       tag: 'div[data-ve-block]',
       getAttrs: (element) => {
         const open = element.getAttribute('data-open') || '';
-        return { open, color: colorFromOpen(open) || '#fde2e4' };
+        return { open, color: colorFromOpen(open) || '#fde2e4', gradient: gradientFromOpen(open) };
       },
     }];
   },
   renderHTML({ node }) {
-    const color = node.attrs.color;
-    return ['div', { class: 've-color-block', 'data-ve-block': '1', style: `background-color:${color};color:${contrastText(color)}` }, 0];
+    const { color, gradient } = node.attrs;
+    const image = gradient ? `;background-image:${gradientCss(gradient.direction, color, gradient.to)}` : '';
+    const text = contrastText(gradient ? mixColors(color, gradient.to) || color : color);
+    return ['div', { class: 've-color-block', 'data-ve-block': '1', style: `background-color:${color}${image};color:${text}` }, 0];
   },
 });
 

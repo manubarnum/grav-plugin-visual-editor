@@ -485,17 +485,42 @@ export function contrastText(color) {
 }
 
 /** Opening tag for a colored block; with an existing tag, only its background and text colors change. */
-export function colorBlockTag(color, open = '') {
+export function colorBlockTag(color, open = '', gradient = null) {
   const background = isHexColor(color) ? color.trim().toLowerCase() : '#fde2e4';
-  const text = contrastText(background);
+  const to = gradient && isHexColor(gradient.to) ? gradient.to.trim().toLowerCase() : '';
+  const image = to ? gradientCss(gradient.direction, background, to) : '';
+  // With a gradient, the text color is picked on the mix of both colors.
+  const text = contrastText(to ? mixColors(background, to) || background : background);
+  const imageDeclaration = image ? `;background-image:${image}` : '';
   if (!open) {
-    return `[div class="ve-block" style="background-color:${background};color:${text};padding:1em 1.25em;border-radius:8px;margin:1em 0"]`;
+    return `[div class="ve-block" style="background-color:${background}${imageDeclaration};color:${text};padding:1em 1.25em;border-radius:8px;margin:1em 0"]`;
   }
-  let tag = open.replace(/(background(?:-color)?\s*:\s*)[^;"\]]+/i, `$1${background}`);
+  let tag = open.replace(/;?\s*background-image\s*:\s*(?:[^;"\]()]|\([^)]*\))+/i, '');
+  tag = tag.replace(/(background(?:-color)?\s*:\s*)[^;"\]]+/i, `$1${background}${imageDeclaration}`);
   tag = /([;"\s])color\s*:/i.test(tag)
     ? tag.replace(/([;"\s])(color\s*:\s*)[^;"\]]+/i, `$1$2${text}`)
     : tag.replace(/(background(?:-color)?\s*:\s*[^;"\]]+)/i, `$1;color:${text}`);
   return tag;
+}
+
+/** Gradient directions: value => CSS opening. Same list as GRADIENT_DIRECTIONS in visual-editor.php. */
+export const gradientDirections = {
+  'to bottom': 'linear-gradient(to bottom',
+  'to right': 'linear-gradient(to right',
+  'to bottom right': 'linear-gradient(to bottom right',
+  radial: 'radial-gradient(circle at center',
+};
+
+/** CSS for a two-color gradient; unknown directions fall back to top to bottom. */
+export function gradientCss(direction, from, to) {
+  return `${gradientDirections[direction] || gradientDirections['to bottom']},${from},${to})`;
+}
+
+/** The gradient written in a colored block's opening tag, as { to, direction }, or null. */
+export function gradientFromOpen(open) {
+  const match = String(open ?? '').match(/background-image\s*:\s*(linear-gradient\((to [a-z ]+)|radial-gradient\(circle at center),\s*#[0-9a-f]{3,8}\s*,\s*(#[0-9a-f]{3,8})\s*\)/i);
+  if (!match) return null;
+  return { to: match[3].toLowerCase(), direction: match[2] ? match[2].toLowerCase() : 'radial' };
 }
 
 /**

@@ -1,6 +1,6 @@
 /** VisualEditor methods — Block-level features: alignment, colored blocks, alerts, protected HTML/Twig/shortcode blocks. Mixed into VisualEditor.prototype in ../editor.js. */
 import { TextSelection } from '@tiptap/pm/state';
-import { alertKinds, alignments, colorBlockTag, colorFromOpen, isHexColor } from '../markdown.js';
+import { alertKinds, alignments, colorBlockTag, colorFromOpen, gradientDirections, gradientFromOpen, isHexColor } from '../markdown.js';
 import { shortcodeContainers } from './ui.js';
 import { t } from '../i18n.js';
 
@@ -104,19 +104,27 @@ export const blockMethods = {
     const current = this.findColorBlock();
     const presets = [['#fde2e4', 'Rose'], ['#fff1c1', 'Yellow'], ['#e3f4e1', 'Green'], ['#ddeefc', 'Blue'], ['#ece4fb', 'Lavender'], ['#f1f1ef', 'Grey']];
     const color = current ? (colorFromOpen(current.node.attrs.open) || current.node.attrs.color) : presets[0][0];
-    const isPreset = presets.some(([value]) => value === color.toLowerCase());
+    const isPreset = (value) => presets.some(([preset]) => preset === String(value).toLowerCase());
+    const gradient = current ? gradientFromOpen(current.node.attrs.open) : null;
+    const directionLabels = { 'to bottom': 'Top to bottom', 'to right': 'Left to right', 'to bottom right': 'Diagonal', radial: 'From the center' };
     this.dialog(current ? 'Block background color' : 'Colored block', [
-      { name: 'preset', label: 'Background color', type: 'select', options: [...presets, ['custom', 'Custom color (below)']], value: isPreset ? color.toLowerCase() : 'custom' },
+      { name: 'preset', label: 'Background color', type: 'select', options: [...presets, ['custom', 'Custom color (below)']], value: isPreset(color) ? color.toLowerCase() : 'custom' },
       { name: 'custom', label: 'Custom color', type: 'color', value: isHexColor(color) ? color : '#fde2e4' },
-    ], ({ preset, custom }) => {
+      { name: 'gradient', label: 'Gradient to', type: 'select', options: [['none', 'No gradient'], ...presets, ['custom', 'Second custom color (below)']], value: gradient ? (isPreset(gradient.to) ? gradient.to : 'custom') : 'none' },
+      { name: 'custom2', label: 'Second custom color', type: 'color', value: gradient?.to || '#ece4fb' },
+      { name: 'direction', label: 'Gradient direction', type: 'select', options: Object.keys(gradientDirections).map((value) => [value, directionLabels[value]]), value: gradient?.direction || 'to bottom' },
+    ], ({ preset, custom, gradient: to, custom2, direction }) => {
       const chosen = preset === 'custom' ? custom : preset;
       if (!isHexColor(chosen)) return this.notify('Choose a valid color.', true);
+      const second = to === 'none' ? '' : to === 'custom' ? custom2 : to;
+      if (second && !isHexColor(second)) return this.notify('Choose a valid color.', true);
+      const chosenGradient = second ? { to: second.toLowerCase(), direction } : null;
       if (current) {
         this.editor.chain().focus().command(({ tr }) => {
-          tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, open: colorBlockTag(chosen, current.node.attrs.open), color: chosen });
+          tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, open: colorBlockTag(chosen, current.node.attrs.open, chosenGradient), color: chosen, gradient: chosenGradient });
           return true;
         }).run();
-      } else if (!this.wrapBlocks('colorBlock', { open: colorBlockTag(chosen), color: chosen })) {
+      } else if (!this.wrapBlocks('colorBlock', { open: colorBlockTag(chosen, '', chosenGradient), color: chosen, gradient: chosenGradient })) {
         this.notify('This selection cannot be placed in a colored block.', true);
       }
     }, current ? () => this.removeColorBlock(current) : null, 'Remove colored block');

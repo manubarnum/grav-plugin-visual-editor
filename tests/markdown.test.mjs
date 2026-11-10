@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { documentToMarkdown, markdownToHtml } from '../src/extensions.js';
 import { Editor, getSchema } from '@tiptap/core';
 import { createExtensions } from '../src/extensions.js';
-import { normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth, detectMarkdownStyle } from '../src/markdown.js';
+import { normalizeTableRow, protectBlocks, protectInline, githubAlerts, imageWidth, withImageWidth, detectMarkdownStyle, colorBlockTag, gradientFromOpen } from '../src/markdown.js';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://example.test/admin/pages/home' });
 global.window = dom.window;
@@ -246,4 +246,18 @@ test('* and _ are escaped only where they could become formatting', () => {
 
 test('tight nested lists stay tight', () => {
   for (const source of ['- A\n  - B\n  - C\n- D\n', '1. A\n   1. B\n2. C\n']) assert.equal(roundTrip(source), source);
+});
+
+test('colored block gradients: written in the shortcode style, read back, round-trip verbatim', () => {
+  const tag = colorBlockTag('#fde2e4', '', { to: '#ece4fb', direction: 'to right' });
+  assert.equal(tag, '[div class="ve-block" style="background-color:#fde2e4;background-image:linear-gradient(to right,#fde2e4,#ece4fb);color:#1f2329;padding:1em 1.25em;border-radius:8px;margin:1em 0"]');
+  assert.deepEqual(gradientFromOpen(tag), { to: '#ece4fb', direction: 'to right' });
+  assert.equal(gradientFromOpen(colorBlockTag('#fde2e4')), null);
+  // Changing the colors of an existing tag keeps its other declarations; removing the gradient removes it.
+  const night = colorBlockTag('#1d3557', tag, { to: '#6a4c93', direction: 'radial' });
+  assert.match(night, /background-color:#1d3557;background-image:radial-gradient\(circle at center,#1d3557,#6a4c93\);color:#ffffff;padding/);
+  assert.doesNotMatch(colorBlockTag('#1d3557', night, null), /background-image/);
+  const source = `${tag}\n\nFairy **text**.\n\n[/div]\n`;
+  assert.match(markdownToHtml(source), /data-ve-block/);
+  assert.equal(roundTrip(source), source);
 });

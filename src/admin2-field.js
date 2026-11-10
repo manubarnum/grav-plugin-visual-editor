@@ -10,14 +10,12 @@
  * echoes every reported value back through the `value` setter.
  */
 import { VisualEditor } from './editor.js';
-import { contrastText, mixColors } from './markdown.js';
+import { contrastText, gradientCss, mixColors } from './markdown.js';
 
 /** Page frontmatter field (added next to the editor by visual-editor.php) previewed as the editing surface color. */
 const PAGE_BACKGROUND = 'header.background_color';
 const PAGE_BACKGROUND_2 = 'header.background_color_2';
 const PAGE_BACKGROUND_DIRECTION = 'header.background_direction';
-/** Same directions as GRADIENT_DIRECTIONS in visual-editor.php. */
-const gradientOpenings = { 'to bottom': 'linear-gradient(to bottom', 'to right': 'linear-gradient(to right', 'to bottom right': 'linear-gradient(to bottom right', radial: 'radial-gradient(circle at center' };
 const safeCssColor = /^(?:#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([\d\s.,%\/deg]+\))$/i;
 
 /* global __VE_CSS__ */
@@ -105,8 +103,7 @@ export class VisualEditorField extends HTMLElement {
     };
     const color = safeCssColor.test(read(PAGE_BACKGROUND)) ? read(PAGE_BACKGROUND) : '';
     const second = color && safeCssColor.test(read(PAGE_BACKGROUND_2)) ? read(PAGE_BACKGROUND_2) : '';
-    const opening = gradientOpenings[read(PAGE_BACKGROUND_DIRECTION)] || gradientOpenings['to bottom'];
-    wrap.style.background = second ? `${opening}, ${color}, ${second})` : color;
+    wrap.style.background = second ? gradientCss(read(PAGE_BACKGROUND_DIRECTION), color, second) : color;
     if (color) {
       const text = contrastText(second ? (mixColors(color, second) || color) : color);
       wrap.style.setProperty('--ve-text', text);

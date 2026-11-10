@@ -739,6 +739,36 @@ test('Insert table goes after the current block, not inside it, and puts the cur
   assert.equal(empty.changes.at(-1), '|  |  |  |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |\n', 'an empty paragraph is replaced');
 });
 
+test('colored block dialog: gradient to a preset or custom color, direction, and back to a solid color', () => {
+  const { el, changes } = mount('Fairy text\n');
+  const editor = el.editor;
+  const open = () => { editor.editor.commands.setTextSelection(3); editor.command('colorBlock'); };
+  const field = (name) => editor.dialogElement.querySelector(`[name="${name}"]`);
+  const submit = () => editor.dialogElement.querySelector('button[type="submit"]').click();
+
+  open();
+  assert.equal(field('gradient').value, 'none');
+  field('gradient').value = '#ece4fb';
+  field('direction').value = 'to bottom right';
+  submit();
+  assert.match(changes.at(-1), /^\[div class="ve-block" style="background-color:#fde2e4;background-image:linear-gradient\(to bottom right,#fde2e4,#ece4fb\);/);
+  assert.match(el.querySelector('.ProseMirror .ve-color-block').getAttribute('style'), /linear-gradient/);
+
+  open();
+  assert.equal(field('gradient').value, '#ece4fb', 'the dialog shows the current gradient');
+  assert.equal(field('direction').value, 'to bottom right');
+  field('gradient').value = 'custom';
+  field('custom2').value = '#1d3557';
+  field('direction').value = 'radial';
+  submit();
+  assert.match(changes.at(-1), /radial-gradient\(circle at center,#fde2e4,#1d3557\)/);
+
+  open();
+  field('gradient').value = 'none';
+  submit();
+  assert.doesNotMatch(changes.at(-1), /background-image/);
+});
+
 test('list buttons produce Markdown lists', async () => {
   const { el, changes } = mount('One\n');
   await el.editor.command('bulletList');
